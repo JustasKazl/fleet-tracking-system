@@ -1,7 +1,0 @@
-:8080 {
-    root * /srv
-    file_server
-
-    # SPA fallback
-    try_files {path} /index.html
-}
