@@ -1,0 +1,7 @@
+[build]
+builder = "nixpacks"
+buildCommand = ""
+builderEnv = { NIXPACKS_BUILD_DIR = "backend" }
+
+[deploy]
+startCommand = "python app.py"
