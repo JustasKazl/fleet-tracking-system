@@ -3,6 +3,6 @@
     "builder": "Nixpacks"
   },
   "deploy": {
-    "startCommand": "python app.py"
+    "startCommand": "python3 backend/app.py"
   }
 }
