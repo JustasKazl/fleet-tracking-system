@@ -5,14 +5,18 @@ export default defineConfig({
   plugins: [react()],
 
   preview: {
-    port: 8080,       // arba 4173, nesvarbu
-    host: true,
-    allowedHosts: [
-      "fleet-tracking-system-production-2cd5.up.railway.app"
-    ]
+    port: 8080,
+    host: "0.0.0.0", // This allows external connections
+    strictPort: true,
   },
 
   server: {
-    host: true
-  }
+    host: "0.0.0.0",
+    port: 5173,
+  },
+
+  build: {
+    outDir: "dist",
+    sourcemap: false, // Disable sourcemaps in production
+  },
 });
