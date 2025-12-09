@@ -4,10 +4,12 @@ import VehicleCard from "../components/VehicleCard";
 import ConfirmModal from "../components/ConfirmModal";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "../context/ToastContext";
+import API_BASE_URL from "../config/api";
 
 function VehiclesPage() {
   const [vehicles, setVehicles] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const { showToast } = useToast();
   const navigate = useNavigate();
 
@@ -19,11 +21,20 @@ function VehiclesPage() {
 
   async function loadVehicles() {
     try {
-      const res = await fetch("http://localhost:5000/api/vehicles");
+      setLoading(true);
+      setError(null);
+      const res = await fetch(`${API_BASE_URL}/api/vehicles`);
+      
+      if (!res.ok) {
+        throw new Error(`Failed to fetch vehicles: ${res.status}`);
+      }
+      
       const data = await res.json();
       setVehicles(data);
     } catch (err) {
       console.error("Failed to load vehicles:", err);
+      setError(err.message);
+      showToast("Nepavyko užkrauti automobilių", "error");
     } finally {
       setLoading(false);
     }
@@ -33,11 +44,13 @@ function VehiclesPage() {
     if (!deleteTarget) return;
 
     try {
-      const res = await fetch(`http://localhost:5000/api/vehicles/${deleteTarget}`, {
+      const res = await fetch(`${API_BASE_URL}/api/vehicles/${deleteTarget}`, {
         method: "DELETE",
       });
 
-      if (!res.ok) throw new Error("Delete failed");
+      if (!res.ok) {
+        throw new Error("Delete failed");
+      }
 
       setVehicles((prev) => prev.filter((v) => v.id !== deleteTarget));
       showToast("Automobilis sėkmingai ištrintas!", "success");
@@ -48,10 +61,9 @@ function VehiclesPage() {
 
     setDeleteTarget(null);
   }
+
   return (
     <DashboardLayout>
-
-      {/* Modalas rodomas tik tada, kai yra ką ištrinti */}
       {deleteTarget !== null && (
         <ConfirmModal
           open={true}
@@ -85,7 +97,20 @@ function VehiclesPage() {
       </div>
 
       {loading ? (
-        <div style={{ padding: 20 }}>Kraunama...</div>
+        <div style={{ padding: 20, textAlign: 'center' }}>
+          <div className="loading-spinner">Kraunama...</div>
+        </div>
+      ) : error ? (
+        <div style={{ padding: 20, textAlign: 'center', color: 'var(--bad)' }}>
+          Klaida: {error}
+          <button 
+            className="btn-primary" 
+            style={{ marginLeft: 10 }}
+            onClick={loadVehicles}
+          >
+            Bandyti dar kartą
+          </button>
+        </div>
       ) : (
         <div className="vehicle-grid">
           {vehicles.length === 0 ? (
@@ -105,7 +130,6 @@ function VehiclesPage() {
       )}
     </DashboardLayout>
   );
-
 }
 
 export default VehiclesPage;
