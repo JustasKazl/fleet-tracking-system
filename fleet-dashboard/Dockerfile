@@ -3,25 +3,26 @@ FROM node:18 AS build
 
 WORKDIR /app
 
-# Copy package files
+# Copy package files first (better layer caching)
 COPY package.json package-lock.json ./
 
-# Install dependencies
-RUN npm ci --only=production
+# Install ALL dependencies (devDependencies needed for vite build)
+RUN npm ci
 
-# Copy source code
+# Copy all source code
 COPY . .
 
-# Build the app
+# Build the production bundle
 RUN npm run build
 
 # --- Production stage ---
 FROM caddy:2
 
-# Copy Caddy config
+# Copy Caddy configuration
 COPY Caddyfile /etc/caddy/Caddyfile
 
-# Copy built files from build stage
+# Copy built static files from build stage
 COPY --from=build /app/dist /srv
 
+# Expose port 8080
 EXPOSE 8080
