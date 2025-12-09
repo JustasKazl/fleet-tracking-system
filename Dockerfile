@@ -1,18 +1,10 @@
-# ---- Base Python Image ----
-FROM python:3.10
+FROM python:3.10-slim
 
-# ---- Set working directory ----
 WORKDIR /app
 
-# ---- Copy backend files ----
-COPY backend/ ./backend/
+COPY backend/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-# ---- Install dependencies ----
-RUN pip install --no-cache-dir -r backend/requirements.txt
+COPY backend/ .
 
-# ---- Expose port ----
-ENV PORT=5000
-EXPOSE 5000
-
-# ---- Run backend ----
-CMD ["python", "backend/app.py"]
+CMD ["python", "app.py"]
