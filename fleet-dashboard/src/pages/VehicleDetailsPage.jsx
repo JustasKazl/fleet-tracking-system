@@ -21,7 +21,7 @@ function VehicleDetailsPage() {
 
     // ---------------------- LOAD VEHICLE ----------------------
     useEffect(() => {
-        fetch(`http://localhost:5000/api/vehicles/${id}`)
+        fetch(`${API_BASE_URL}/api/vehicles/${id}`)
             .then(res => res.json())
             .then(data => setVehicle(data))
             .finally(() => setLoading(false));
@@ -29,14 +29,14 @@ function VehicleDetailsPage() {
 
     // ---------------------- LOAD DOCUMENTS ----------------------
     async function loadDocuments() {
-        const res = await fetch(`http://localhost:5000/api/vehicles/${id}/documents`);
+        const res = await fetch(`${API_BASE_URL}/api/vehicles/${id}/documents`);
         setDocuments(await res.json());
     }
     useEffect(() => { loadDocuments(); }, [id]);
 
     // ---------------------- LOAD SERVICE RECORDS ----------------------
     async function loadService() {
-        const res = await fetch(`http://localhost:5000/api/vehicles/${id}/service`);
+        const res = await fetch(`${API_BASE_URL}/api/vehicles/${id}/service`);
         setServiceRecords(await res.json());
     }
     useEffect(() => { loadService(); }, [id]);
@@ -128,7 +128,7 @@ function VehicleDetailsPage() {
 
                                         <div className="document-actions">
                                             <a
-                                                href={`http://localhost:5000/uploads/${doc.file_path}`}
+                                                href={`${API_BASE_URL}/uploads/${doc.file_path}`}
                                                 target="_blank"
                                                 className="btn-link"
                                             >
@@ -234,12 +234,12 @@ function VehicleDetailsPage() {
                     onCancel={() => setConfirmDelete(null)}
                     onConfirm={async () => {
                         if (confirmDelete.type === "document") {
-                            await fetch(`http://localhost:5000/api/documents/${confirmDelete.id}`, {
+                            await fetch(`${API_BASE_URL}/api/documents/${confirmDelete.id}`, {
                                 method: "DELETE",
                             });
                             loadDocuments();
                         } else {
-                            await fetch(`http://localhost:5000/api/service/${confirmDelete.id}`, {
+                            await fetch(`${API_BASE_URL}/api/service/${confirmDelete.id}`, {
                                 method: "DELETE",
                             });
                             loadService();
