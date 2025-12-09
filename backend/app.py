@@ -28,8 +28,13 @@ CORS(app)
 # ----------------------------- DB -----------------------------
 
 def get_db():
-    conn = psycopg2.connect(DATABASE_URL)
-    return conn
+    try:
+        conn = psycopg2.connect(DATABASE_URL)
+        return conn
+    except psycopg2.OperationalError as e:
+        print(f"❌ Database connection failed: {e}")
+        print(f"DATABASE_URL starts with: {DATABASE_URL[:20] if DATABASE_URL else 'NOT SET'}...")
+        raise
 
 def init_db():
     """Initialize PostgreSQL database with tables"""
