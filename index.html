@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="lt">
+<head>
+  <meta charset="UTF-8" />
+  <title>Fleet Dashboard – Prototipas</title>
+  <style>
+    :root {
+      --bg-main: #0d0b1a;
+      --bg-elevated: #1c1533;
+      --bg-elevated-soft: #171228;
+      --accent: #6c4bf4;
+      --accent-soft: rgba(108, 75, 244, 0.15);
+      --text-main: #ffffff;
+      --text-muted: #c9c7d4;
+      --border-subtle: #2a2143;
+      --good: #3bf28c;
+      --warn: #f2e63b;
+      --bad: #f24444;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: radial-gradient(circle at top left, #241b4b 0, #0d0b1a 45%, #05030a 100%);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .page {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 16px 20px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    /* TOPBAR */
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .burger {
+      width: 30px;
+      height: 24px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      cursor: pointer;
+    }
+
+    .burger-line {
+      height: 3px;
+      border-radius: 999px;
+      background: var(--accent);
+    }
+
+    .topbar-main {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .topbar-title {
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      font-size: 13px;
+      color: var(--accent);
+    }
+
+    .topbar-sub {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .topbar-right {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 18px;
+    }
+
+    .user-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border-subtle);
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .user-avatar {
+      width: 22px;
+      height: 22px;
+      border-radius: 999px;
+      background: linear-gradient(135deg, var(--accent), #f97316);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--good);
+    }
+
+    /* KPI CARDS */
+
+    .kpi-row {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .kpi-card {
+      background: var(--bg-elevated);
+      border-radius: 10px;
+      padding: 10px 12px;
+      border: 1px solid var(--border-subtle);
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .kpi-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+    }
+
+    .kpi-value {
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .kpi-sub {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .kpi-pill {
+      margin-left: auto;
+      padding: 2px 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(201, 199, 212, 0.3);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.09em;
+      color: var(--text-muted);
+    }
+
+    /* MAIN GRID */
+
+    .main-grid {
+      display: grid;
+      grid-template-columns: 3fr 2fr;
+      gap: 10px;
+      min-height: 480px;
+    }
+
+    .column {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .card {
+      background: var(--bg-elevated);
+      border-radius: 10px;
+      padding: 10px 12px;
+      border: 1px solid var(--border-subtle);
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+
+    .card-title {
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .card-sub {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .chip {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding: 2px 6px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.09);
+      color: var(--text-muted);
+    }
+
+    /* Alerts list */
+
+    .alert-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 12px;
+    }
+
+    .alert-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 7px;
+      border-radius: 7px;
+      background: rgba(0, 0, 0, 0.18);
+      border: 1px solid rgba(255, 255, 255, 0.03);
+    }
+
+    .alert-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+    }
+
+    .alert-dot.good { background: var(--good); }
+    .alert-dot.warn { background: var(--warn); }
+    .alert-dot.bad  { background: var(--bad); }
+
+    .alert-main {
+      flex: 1;
+    }
+
+    .alert-title {
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .alert-meta {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .alert-time {
+      font-size: 11px;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+
+    /* Top vehicles */
+
+    .top-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 12px;
+    }
+
+    .top-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 5px 7px;
+      border-radius: 7px;
+      background: rgba(0, 0, 0, 0.18);
+      border: 1px solid rgba(255, 255, 255, 0.03);
+    }
+
+    .top-badge {
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+    }
+
+    /* Vehicles table */
+
+    .vehicles-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      margin-top: 4px;
+    }
+
+    .vehicles-table thead {
+      background: var(--bg-elevated-soft);
+    }
+
+    .vehicles-table th,
+    .vehicles-table td {
+      padding: 6px 6px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      text-align: left;
+    }
+
+    .vehicles-table th {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+    }
+
+    .vehicles-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .vehicle-name {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .vehicle-icon {
+      width: 18px;
+      height: 18px;
+      border-radius: 4px;
+      background: linear-gradient(135deg, #4f46e5, #ec4899);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+    }
+
+    .status-tag {
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .status-online {
+      background: rgba(59, 242, 140, 0.12);
+      color: var(--good);
+    }
+
+    .status-offline {
+      background: rgba(242, 68, 68, 0.12);
+      color: var(--bad);
+    }
+
+    .status-warn {
+      background: rgba(242, 230, 59, 0.12);
+      color: var(--warn);
+    }
+
+    /* Map */
+
+    .map-placeholder {
+      margin-top: 6px;
+      border-radius: 10px;
+      border: 1px dashed rgba(255, 255, 255, 0.15);
+      background: radial-gradient(circle at top, #241b4b 0, #120c25 40%, #060312 100%);
+      height: 260px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-muted);
+      font-size: 13px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .map-marker {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      border: 2px solid rgba(255, 255, 255, 0.8);
+      background: var(--accent);
+      position: absolute;
+      box-shadow: 0 0 8px rgba(108, 75, 244, 0.9);
+    }
+
+    .map-marker:nth-child(1) { top: 30%; left: 35%; }
+    .map-marker:nth-child(2) { top: 55%; left: 60%; }
+    .map-marker:nth-child(3) { top: 70%; left: 25%; }
+
+    .map-full-btn {
+      position: absolute;
+      right: 10px;
+      bottom: 10px;
+      font-size: 11px;
+      padding: 3px 7px;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      background: rgba(0, 0, 0, 0.38);
+      color: var(--text-muted);
+      cursor: default;
+    }
+
+    .map-label {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      font-size: 11px;
+      color: var(--text-muted);
+      background: rgba(0, 0, 0, 0.45);
+      padding: 2px 6px;
+      border-radius: 6px;
+    }
+
+    /* Responsive */
+
+    @media (max-width: 1100px) {
+      .kpi-row {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .main-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 700px) {
+      .page {
+        padding: 12px;
+      }
+      .topbar-sub {
+        display: none;
+      }
+      .topbar-right {
+        gap: 10px;
+      }
+      .kpi-row {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <!-- TOPBAR -->
+    <header class="topbar">
+      <div class="burger">
+        <div class="burger-line"></div>
+        <div class="burger-line"></div>
+        <div class="burger-line"></div>
+      </div>
+      <div class="topbar-main">
+        <div class="topbar-title">Transporto stebėjimo sistema</div>
+        <div class="topbar-sub">Pagrindinis valdymo skydelis • nuomos parko stebėjimas realiu laiku</div>
+      </div>
+      <div class="topbar-right">
+        <div style="display:flex;align-items:center;gap:6px;font-size:12px;">
+          <span class="status-dot"></span>
+          <span>Serveris prisijungęs</span>
+        </div>
+        <div class="user-pill">
+          <div class="user-avatar">JK</div>
+          <div>
+            <div style="font-size:12px;">Justas Kazlauskas</div>
+            <div style="font-size:10px;color:var(--text-muted);">Administratorius</div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- KPI -->
+    <section class="kpi-row">
+      <div class="kpi-card">
+        <div class="kpi-label">Aktyvūs automobiliai</div>
+        <div style="display:flex;align-items:flex-end;gap:6px;">
+          <div class="kpi-value">7</div>
+          <div class="kpi-sub">iš 9</div>
+        </div>
+        <div class="kpi-sub">Šiuo metu siunčia duomenis</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Offline</div>
+        <div class="kpi-value">2</div>
+        <div class="kpi-sub">Paskutinis ryšys prieš 1 val.</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Šiandien nuvažiuota</div>
+        <div style="display:flex;align-items:flex-end;gap:6px;">
+          <div class="kpi-value">42.3 km</div>
+        </div>
+        <div class="kpi-sub">Visų automobilių suma</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Aktyvūs įspėjimai</div>
+        <div style="display:flex;align-items:flex-end;gap:6px;">
+          <div class="kpi-value">3</div>
+          <div class="kpi-pill">Detali peržiūra</div>
+        </div>
+        <div class="kpi-sub">Tepalai, RPM, sutarties pabaiga</div>
+      </div>
+    </section>
+
+    <!-- MAIN GRID -->
+    <section class="main-grid">
+      <!-- LEFT COLUMN -->
+      <div class="column">
+        <!-- Alerts + Top vehicles in one row (stacked on small screens) -->
+        <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:10px;">
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Naujiausi įspėjimai</div>
+                <div class="card-sub">Sistemos generuojami pranešimai</div>
+              </div>
+              <span class="chip">Per 24 val.</span>
+            </div>
+            <div class="alert-list">
+              <div class="alert-item">
+                <span class="alert-dot bad"></span>
+                <div class="alert-main">
+                  <div class="alert-title">Golf 2010 – labai aukštos apsukos</div>
+                  <div class="alert-meta">RPM viršijo ribą 6 kartus per paskutines 2 val.</div>
+                </div>
+                <div class="alert-time">Prieš 8 min.</div>
+              </div>
+              <div class="alert-item">
+                <span class="alert-dot warn"></span>
+                <div class="alert-main">
+                  <div class="alert-title">Toyota Yaris – artėja tepalų keitimas</div>
+                  <div class="alert-meta">Liko ~600 km iki planinio keitimo.</div>
+                </div>
+                <div class="alert-time">Prieš 1 val.</div>
+              </div>
+              <div class="alert-item">
+                <span class="alert-dot bad"></span>
+                <div class="alert-main">
+                  <div class="alert-title">Audi A4 – offline</div>
+                  <div class="alert-meta">Ryšys nutrūko prieš 2 val. • Patikrinti įrenginį.</div>
+                </div>
+                <div class="alert-time">Prieš 2 val.</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Daugiausiai pravažiavę auto</div>
+                <div class="card-sub">Šios savaitės TOP 3</div>
+              </div>
+            </div>
+            <div class="top-list">
+              <div class="top-item">
+                <div>
+                  <span class="top-badge">1 vieta</span>
+                  <span style="margin-left:6px;">BMW 530d</span>
+                </div>
+                <div>183 km</div>
+              </div>
+              <div class="top-item">
+                <div>
+                  <span class="top-badge">2 vieta</span>
+                  <span style="margin-left:6px;">Golf 2010</span>
+                </div>
+                <div>162 km</div>
+              </div>
+              <div class="top-item">
+                <div>
+                  <span class="top-badge">3 vieta</span>
+                  <span style="margin-left:6px;">Tesla Model 3</span>
+                </div>
+                <div>145 km</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Vehicles list -->
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Automobilių sąrašas</div>
+              <div class="card-sub">Statusas, nuvažiuoti kilometrai, nuomos laikotarpis</div>
+            </div>
+            <span class="chip">Spustelėjus – priartinti žemėlapyje</span>
+          </div>
+          <table class="vehicles-table">
+            <thead>
+              <tr>
+                <th>Automobilis</th>
+                <th>Statusas</th>
+                <th>Šiandien</th>
+                <th>Nuo aktyvavimo</th>
+                <th>Nuomos pabaiga</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>
+                  <div class="vehicle-name">
+                    <div class="vehicle-icon">B</div>
+                    <span>BMW 530d</span>
+                  </div>
+                </td>
+                <td><span class="status-tag status-online">● Online</span></td>
+                <td>32.4 km</td>
+                <td>1 842 km</td>
+                <td>2026-03-10</td>
+              </tr>
+              <tr>
+                <td>
+                  <div class="vehicle-name">
+                    <div class="vehicle-icon">G</div>
+                    <span>Golf 2010</span>
+                  </div>
+                </td>
+                <td><span class="status-tag status-online">● Online</span></td>
+                <td>18.1 km</td>
+                <td>965 km</td>
+                <td>2025-09-01</td>
+              </tr>
+              <tr>
+                <td>
+                  <div class="vehicle-name">
+                    <div class="vehicle-icon">T</div>
+                    <span>Tesla Model 3</span>
+                  </div>
+                </td>
+                <td><span class="status-tag status-online">● Online</span></td>
+                <td>12.5 km</td>
+                <td>410 km</td>
+                <td>2026-01-15</td>
+              </tr>
+              <tr>
+                <td>
+                  <div class="vehicle-name">
+                    <div class="vehicle-icon">Y</div>
+                    <span>Toyota Yaris</span>
+                  </div>
+                </td>
+                <td><span class="status-tag status-warn">⚠ Įspėjimas</span></td>
+                <td>7.8 km</td>
+                <td>2 310 km</td>
+                <td>2025-04-30</td>
+              </tr>
+              <tr>
+                <td>
+                  <div class="vehicle-name">
+                    <div class="vehicle-icon">A</div>
+                    <span>Audi A4</span>
+                  </div>
+                </td>
+                <td><span class="status-tag status-offline">● Offline</span></td>
+                <td>—</td>
+                <td>653 km</td>
+                <td>2025-12-01</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- RIGHT COLUMN: MAP -->
+      <div class="column">
+        <div class="card" style="flex:1;display:flex;flex-direction:column;">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Žemėlapis</div>
+              <div class="card-sub">Visų automobilių pozicijos • galimybė padidinti per visą ekraną</div>
+            </div>
+          </div>
+          <div class="map-placeholder">
+            <div class="map-label">Žemėlapio zona (prototipas)</div>
+            <div class="map-marker"></div>
+            <div class="map-marker"></div>
+            <div class="map-marker"></div>
+            <div class="map-full-btn">Padidinti per visą ekraną</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div style="margin-top:4px;font-size:11px;color:var(--text-muted);text-align:right;">
+      Prototipinis dizainas – realioje sistemoje čia bus dinaminiai duomenys iš Flask API.
+    </div>
+  </div>
+</body>
+</html>
