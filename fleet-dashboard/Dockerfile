@@ -26,3 +26,6 @@ COPY --from=build /app/dist /srv
 
 # Expose port 8080
 EXPOSE 8080
+
+# Start Caddy server
+CMD ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
