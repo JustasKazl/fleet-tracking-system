@@ -1,3 +1,4 @@
 flask
-flask_cors
+flask-cors
 werkzeug
+psycopg2-binary  # PostgreSQL adapter
