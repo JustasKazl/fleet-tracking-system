@@ -9,6 +9,14 @@ from psycopg2.extras import RealDictCursor
 
 # Configuration
 DATABASE_URL = os.environ.get('DATABASE_URL')
+
+# Check if DATABASE_URL is set
+if not DATABASE_URL:
+    raise ValueError(
+        "❌ DATABASE_URL environment variable is not set!\n"
+        "Please add a PostgreSQL database to your Railway project."
+    )
+
 UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), "uploads")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
