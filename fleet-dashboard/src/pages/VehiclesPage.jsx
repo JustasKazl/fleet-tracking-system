@@ -19,48 +19,48 @@ function VehiclesPage() {
     loadVehicles();
   }, []);
 
-  async function loadVehicles() {
-    try {
-      setLoading(true);
-      setError(null);
-      const res = await fetch(`${API_BASE_URL}/api/vehicles`);
-      
-      if (!res.ok) {
-        throw new Error(`Failed to fetch vehicles: ${res.status}`);
-      }
-      
-      const data = await res.json();
-      setVehicles(data);
-    } catch (err) {
-      console.error("Failed to load vehicles:", err);
-      setError(err.message);
-      showToast("Nepavyko užkrauti automobilių", "error");
-    } finally {
-      setLoading(false);
+async function loadVehicles() {
+  try {
+    setLoading(true);
+    setError(null);
+    const res = await fetch(`${API_BASE_URL}/api/vehicles`); // ✅ Added (
+    
+    if (!res.ok) {
+      throw new Error(`Failed to fetch vehicles: ${res.status}`); // ✅ Added (
     }
+    
+    const data = await res.json();
+    setVehicles(data);
+  } catch (err) {
+    console.error("Failed to load vehicles:", err);
+    setError(err.message);
+    showToast("Nepavyko užkrauti automobilių", "error");
+  } finally {
+    setLoading(false);
   }
+}
 
-  async function performDelete() {
-    if (!deleteTarget) return;
+async function performDelete() {
+  if (!deleteTarget) return;
 
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/vehicles/${deleteTarget}`, {
-        method: "DELETE",
-      });
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/vehicles/${deleteTarget}`, { // ✅ Added (
+      method: "DELETE",
+    });
 
-      if (!res.ok) {
-        throw new Error("Delete failed");
-      }
-
-      setVehicles((prev) => prev.filter((v) => v.id !== deleteTarget));
-      showToast("Automobilis sėkmingai ištrintas!", "success");
-    } catch (err) {
-      console.error(err);
-      showToast("Nepavyko ištrinti automobilio", "error");
+    if (!res.ok) {
+      throw new Error("Delete failed");
     }
 
-    setDeleteTarget(null);
+    setVehicles((prev) => prev.filter((v) => v.id !== deleteTarget));
+    showToast("Automobilis sėkmingai ištrintas!", "success");
+  } catch (err) {
+    console.error(err);
+    showToast("Nepavyko ištrinti automobilio", "error");
   }
+
+  setDeleteTarget(null);
+}
 
   return (
     <DashboardLayout>
