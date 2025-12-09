@@ -1,16 +1,18 @@
 from flask import Flask, request, jsonify, send_from_directory
-import sqlite3
-from datetime import datetime
-from flask_cors import CORS
-from werkzeug.utils import secure_filename
 import os
 import time
+from datetime import datetime, timedelta
+from flask_cors import CORS
+from werkzeug.utils import secure_filename
+import psycopg2
+from psycopg2.extras import RealDictCursor
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "fleet.db")
+# Configuration
+DATABASE_URL = os.environ.get('DATABASE_URL')
 UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), "uploads")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-ALLOWED_EXTENSIONS = {"pdf", "jpg", "jpeg", "png"}   # ### NEW
+ALLOWED_EXTENSIONS = {"pdf", "jpg", "jpeg", "png"}
 
 app = Flask(__name__)
 CORS(app)
@@ -18,17 +20,18 @@ CORS(app)
 # ----------------------------- DB -----------------------------
 
 def get_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
+    conn = psycopg2.connect(DATABASE_URL)
     return conn
 
 def init_db():
+    """Initialize PostgreSQL database with tables"""
     conn = get_db()
     cur = conn.cursor()
 
+    # Create vehicles table
     cur.execute("""
     CREATE TABLE IF NOT EXISTS vehicles (
-        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        id          SERIAL PRIMARY KEY,
         device_id   TEXT NOT NULL,
         brand       TEXT,
         model       TEXT,
@@ -38,26 +41,28 @@ def init_db():
         fmb_serial  TEXT,
         status      TEXT DEFAULT 'unknown',
         total_km    INTEGER DEFAULT 0,
-        created_at  TEXT DEFAULT CURRENT_TIMESTAMP
+        created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
     """)
 
+    # Create documents table
     cur.execute("""
     CREATE TABLE IF NOT EXISTS documents (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
         vehicle_id INTEGER NOT NULL,
         doc_type TEXT NOT NULL,
         title TEXT,
         file_path TEXT,
         valid_until TEXT,
-        uploaded_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY(vehicle_id) REFERENCES vehicles(id) ON DELETE CASCADE
     );
     """)
 
+    # Create service_records table
     cur.execute("""
     CREATE TABLE IF NOT EXISTS service_records (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
         vehicle_id INTEGER NOT NULL,
         service_type TEXT NOT NULL,
         performed_date TEXT NOT NULL,
@@ -66,19 +71,20 @@ def init_db():
         next_date TEXT,
         location TEXT,
         notes TEXT,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY(vehicle_id) REFERENCES vehicles(id) ON DELETE CASCADE
     );
     """)
 
-
     conn.commit()
+    cur.close()
     conn.close()
+    print("✅ Database initialized successfully")
 
 
 # ------------------------ Helpers -----------------------------
 
-def allowed_file(filename):   # ### NEW
+def allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
@@ -86,7 +92,19 @@ def allowed_file(filename):   # ### NEW
 
 @app.route("/api/health")
 def api_health():
-    return jsonify({"status": "ok", "time": datetime.utcnow().isoformat() + "Z"})
+    try:
+        conn = get_db()
+        conn.close()
+        return jsonify({
+            "status": "ok", 
+            "time": datetime.utcnow().isoformat() + "Z",
+            "database": "connected"
+        })
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
 
 
 # =============== VEHICLES ===============
@@ -94,9 +112,12 @@ def api_health():
 @app.route("/api/vehicles", methods=["GET"])
 def api_get_vehicles():
     conn = get_db()
-    rows = conn.execute("SELECT * FROM vehicles ORDER BY created_at DESC").fetchall()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute("SELECT * FROM vehicles ORDER BY created_at DESC")
+    rows = cur.fetchall()
+    cur.close()
     conn.close()
-    return jsonify([dict(r) for r in rows])
+    return jsonify(rows)
 
 
 @app.route("/api/vehicles", methods=["POST"])
@@ -109,12 +130,13 @@ def api_add_vehicle():
         return jsonify({"error": "device_id is required"}), 400
 
     conn = get_db()
-    cur = conn.cursor()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
 
     cur.execute("""
         INSERT INTO vehicles 
         (device_id, brand, model, custom_name, plate, imei, fmb_serial, status, total_km)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        RETURNING id
     """, (
         device_id,
         data.get("brand", ""),
@@ -127,23 +149,27 @@ def api_add_vehicle():
         data.get("total_km", 0),
     ))
 
+    new_id = cur.fetchone()['id']
     conn.commit()
-    new_id = cur.lastrowid
+    cur.close()
     conn.close()
 
-    return jsonify({"ok": True, "id": new_id})
+    return jsonify({"ok": True, "id": new_id}), 201
 
 
 @app.route("/api/vehicles/<int:vehicle_id>", methods=["GET"])
 def api_get_vehicle(vehicle_id):
     conn = get_db()
-    row = conn.execute("SELECT * FROM vehicles WHERE id = ?", (vehicle_id,)).fetchone()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute("SELECT * FROM vehicles WHERE id = %s", (vehicle_id,))
+    row = cur.fetchone()
+    cur.close()
     conn.close()
 
     if not row:
         return jsonify({"error": "Vehicle not found"}), 404
 
-    return jsonify(dict(row))
+    return jsonify(row)
 
 
 @app.route("/api/vehicles/<int:vehicle_id>", methods=["PUT"])
@@ -155,9 +181,9 @@ def api_update_vehicle(vehicle_id):
 
     cur.execute("""
         UPDATE vehicles
-        SET brand = ?, model = ?, custom_name = ?, plate = ?, imei = ?, 
-            fmb_serial = ?, status = ?, total_km = ?
-        WHERE id = ?
+        SET brand = %s, model = %s, custom_name = %s, plate = %s, imei = %s, 
+            fmb_serial = %s, status = %s, total_km = %s
+        WHERE id = %s
     """, (
         data.get("brand"),
         data.get("model"),
@@ -171,6 +197,7 @@ def api_update_vehicle(vehicle_id):
     ))
 
     conn.commit()
+    cur.close()
     conn.close()
 
     return jsonify({"ok": True})
@@ -179,8 +206,10 @@ def api_update_vehicle(vehicle_id):
 @app.route("/api/vehicles/<int:vehicle_id>", methods=["DELETE"])
 def api_delete_vehicle(vehicle_id):
     conn = get_db()
-    conn.execute("DELETE FROM vehicles WHERE id = ?", (vehicle_id,))
+    cur = conn.cursor()
+    cur.execute("DELETE FROM vehicles WHERE id = %s", (vehicle_id,))
     conn.commit()
+    cur.close()
     conn.close()
     return jsonify({"ok": True})
 
@@ -197,22 +226,24 @@ def upload_document(vehicle_id):
     if not file:
         return jsonify({"error": "No file"}), 400
 
-    if not allowed_file(file.filename):  # ### NEW - validation
+    if not allowed_file(file.filename):
         return jsonify({"error": "Leidžiami tik PDF, JPG, JPEG, PNG"}), 400
 
     ext = file.filename.rsplit(".", 1)[1].lower()
-    filename = f"v{vehicle_id}_{int(time.time())}.{ext}"  # ### NEW safe filename
+    filename = f"v{vehicle_id}_{int(time.time())}.{ext}"
     filepath = os.path.join(UPLOAD_FOLDER, filename)
 
     file.save(filepath)
 
     conn = get_db()
-    conn.execute("""
+    cur = conn.cursor()
+    cur.execute("""
         INSERT INTO documents (vehicle_id, doc_type, title, file_path, valid_until)
-        VALUES (?, ?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s, %s)
     """, (vehicle_id, doc_type, title, filename, valid_until))
 
     conn.commit()
+    cur.close()
     conn.close()
 
     return jsonify({"ok": True, "file": filename})
@@ -221,19 +252,24 @@ def upload_document(vehicle_id):
 @app.route("/api/vehicles/<int:vehicle_id>/documents", methods=["GET"])
 def list_documents(vehicle_id):
     conn = get_db()
-    rows = conn.execute("""
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute("""
         SELECT * FROM documents 
-        WHERE vehicle_id = ?
+        WHERE vehicle_id = %s
         ORDER BY uploaded_at DESC
-    """, (vehicle_id,)).fetchall()
+    """, (vehicle_id,))
+    rows = cur.fetchall()
+    cur.close()
     conn.close()
-    return jsonify([dict(r) for r in rows])
+    return jsonify(rows)
 
 
 @app.route("/api/documents/<int:doc_id>", methods=["DELETE"])
 def delete_document(doc_id):
     conn = get_db()
-    row = conn.execute("SELECT file_path FROM documents WHERE id = ?", (doc_id,)).fetchone()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute("SELECT file_path FROM documents WHERE id = %s", (doc_id,))
+    row = cur.fetchone()
 
     if row:
         try:
@@ -241,8 +277,9 @@ def delete_document(doc_id):
         except:
             pass
 
-    conn.execute("DELETE FROM documents WHERE id = ?", (doc_id,))
+    cur.execute("DELETE FROM documents WHERE id = %s", (doc_id,))
     conn.commit()
+    cur.close()
     conn.close()
 
     return jsonify({"ok": True})
@@ -254,19 +291,26 @@ def delete_document(doc_id):
 def serve_uploaded_file(filename):
     return send_from_directory(UPLOAD_FOLDER, filename, as_attachment=False)
 
-@app.get("/api/vehicles/<int:vehicle_id>/service")
+
+# =============== SERVICE RECORDS ===============
+
+@app.route("/api/vehicles/<int:vehicle_id>/service", methods=["GET"])
 def api_get_service_records(vehicle_id):
     conn = get_db()
-    rows = conn.execute("""
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute("""
         SELECT * FROM service_records
-        WHERE vehicle_id = ?
+        WHERE vehicle_id = %s
         ORDER BY performed_date DESC
-    """, (vehicle_id,)).fetchall()
+    """, (vehicle_id,))
+    rows = cur.fetchall()
+    cur.close()
     conn.close()
 
-    return jsonify([dict(r) for r in rows])
+    return jsonify(rows)
 
-@app.post("/api/vehicles/<int:vehicle_id>/service")
+
+@app.route("/api/vehicles/<int:vehicle_id>/service", methods=["POST"])
 def api_add_service_record(vehicle_id):
     data = request.json
 
@@ -295,7 +339,6 @@ def api_add_service_record(vehicle_id):
         next_km = performed_km + GENERAL_CHECK
 
     elif service_type == "ta":
-        from datetime import datetime, timedelta
         d = datetime.strptime(performed_date, "%Y-%m-%d")
         next_date = (d + timedelta(days=TA_INTERVAL_DAYS)).strftime("%Y-%m-%d")
 
@@ -305,22 +348,25 @@ def api_add_service_record(vehicle_id):
     cur.execute("""
         INSERT INTO service_records
         (vehicle_id, service_type, performed_date, performed_km, next_km, next_date, location, notes)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
     """, (vehicle_id, service_type, performed_date, performed_km, next_km, next_date, location, notes))
 
     conn.commit()
+    cur.close()
     conn.close()
 
-    return jsonify({"ok": True})
+    return jsonify({"ok": True}), 201
 
-@app.delete("/api/service/<int:record_id>")
+
+@app.route("/api/service/<int:record_id>", methods=["DELETE"])
 def api_delete_service(record_id):
     conn = get_db()
-    conn.execute("DELETE FROM service_records WHERE id = ?", (record_id,))
+    cur = conn.cursor()
+    cur.execute("DELETE FROM service_records WHERE id = %s", (record_id,))
     conn.commit()
+    cur.close()
     conn.close()
     return jsonify({"ok": True})
-
 
 
 # =============== DEBUG ===============
@@ -328,13 +374,22 @@ def api_delete_service(record_id):
 @app.route("/debug/columns")
 def debug_columns():
     conn = get_db()
-    cur = conn.execute("PRAGMA table_info(vehicles)")
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT column_name, data_type 
+        FROM information_schema.columns 
+        WHERE table_name = 'vehicles'
+        ORDER BY ordinal_position
+    """)
     cols = cur.fetchall()
+    cur.close()
     conn.close()
-    return jsonify([{"cid": c[0], "name": c[1], "type": c[2]} for c in cols])
+    return jsonify([{"name": c[0], "type": c[1]} for c in cols])
+
+
 @app.route("/")
 def root():
-    return "Fleet backend running", 200
+    return "Fleet backend running on PostgreSQL", 200
 
 
 # --------------------- MAIN ------------------------
@@ -342,5 +397,4 @@ def root():
 if __name__ == "__main__":
     init_db()
     port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
-
+    app.run(host="0.0.0.0", port=port, debug=False)
