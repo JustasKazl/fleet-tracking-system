@@ -1,7 +1,9 @@
 [build]
-builder = "nixpacks"
-buildCommand = ""
-builderEnv = { NIXPACKS_BUILD_DIR = "backend" }
+builder = "NIXPACKS"
+buildCommand = "pip install -r backend/requirements.txt"
 
-[deploy]
-startCommand = "python app.py"
+[start]
+startCommand = "python backend/app.py"
+
+[variables]
+PORT = "5000"
