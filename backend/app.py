@@ -332,6 +332,9 @@ def debug_columns():
     cols = cur.fetchall()
     conn.close()
     return jsonify([{"cid": c[0], "name": c[1], "type": c[2]} for c in cols])
+@app.route("/")
+def root():
+    return "Fleet backend running", 200
 
 
 # --------------------- MAIN ------------------------
