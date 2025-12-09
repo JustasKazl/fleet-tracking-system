@@ -1,9 +1,9 @@
 [build]
 builder = "NIXPACKS"
-buildCommand = "pip install -r backend/requirements.txt"
+buildCommand = "python3 -m pip install -r backend/requirements.txt"
 
 [start]
-startCommand = "python backend/app.py"
+startCommand = "python3 backend/app.py"
 
 [variables]
 PORT = "5000"
