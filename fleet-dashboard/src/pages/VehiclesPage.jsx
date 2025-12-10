@@ -23,12 +23,28 @@ async function loadVehicles() {
   try {
     setLoading(true);
     setError(null);
-    const res = await fetch(`https://fleet-tracking-system-production.up.railway.app/api/vehicles`);
-    
-    if (!res.ok) {
-      throw new Error(`Failed to fetch vehicles: ${res.status}`); // ✅ Added (
+
+    const res = await fetch(
+      "https://fleet-tracking-system-production.up.railway.app/api/vehicles"
+    );
+
+    const contentType = res.headers.get("content-type") || "";
+
+    // 🔍 Debug: log non-JSON responses
+    if (!contentType.includes("application/json")) {
+      const text = await res.text();
+      console.error("NOT JSON RESPONSE:", {
+        status: res.status,
+        contentType,
+        bodySnippet: text.slice(0, 300),
+      });
+      throw new Error("Server did not return JSON");
     }
-    
+
+    if (!res.ok) {
+      throw new Error(`Failed to fetch vehicles: ${res.status}`);
+    }
+
     const data = await res.json();
     setVehicles(data);
   } catch (err) {
@@ -39,6 +55,7 @@ async function loadVehicles() {
     setLoading(false);
   }
 }
+
 
 async function performDelete() {
   if (!deleteTarget) return;
