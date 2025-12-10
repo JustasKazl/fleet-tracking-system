@@ -25,7 +25,7 @@ async function loadVehicles() {
     setError(null);
 
     const res = await fetch(
-      "${API_BASE_URL}/vehicles"
+      '${API_BASE_URL}/vehicles'
     );
 
     const contentType = res.headers.get("content-type") || "";
