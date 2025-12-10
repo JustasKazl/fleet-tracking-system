@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useToast } from "../context/ToastContext";
+import API_BASE_URL from "../api";
 
 function AddServiceModal({ vehicleId, onClose, onAdded }) {
     const { showToast } = useToast();
@@ -26,7 +27,7 @@ function AddServiceModal({ vehicleId, onClose, onAdded }) {
             notes,
         };
 
-        const res = await fetch(`http://localhost:5000/api/vehicles/${vehicleId}/service`, {
+        const res = await fetch(`${API_BASE_URL}/api/vehicles/${vehicleId}/service`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
