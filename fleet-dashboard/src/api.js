@@ -1,6 +1,6 @@
 // src/config/api.js
 // Create this new file to centralize API configuration
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API_BASE_URL = import.meta.env.VITE_API_URL;
 
 export const API_ENDPOINTS = {
   vehicles: `${API_BASE_URL}/api/vehicles`,
