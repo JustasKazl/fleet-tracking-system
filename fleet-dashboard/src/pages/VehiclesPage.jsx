@@ -4,7 +4,7 @@ import VehicleCard from "../components/VehicleCard";
 import ConfirmModal from "../components/ConfirmModal";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "../context/ToastContext";
-import API_BASE_URL from "../config/api";
+import API_BASE_URL from "../api";
 
 function VehiclesPage() {
   const [vehicles, setVehicles] = useState([]);
