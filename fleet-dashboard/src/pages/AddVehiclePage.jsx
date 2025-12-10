@@ -36,7 +36,7 @@ function AddVehiclePage() {
     console.log("Payload:", payload);
 
     try {
-      const res = await fetch('${API_BASE_URL}/api/vehicles', {
+      const res = await fetch(`${API_BASE_URL}/api/vehicles`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
