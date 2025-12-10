@@ -5,6 +5,7 @@ import AddDocumentForm from "../components/AddDocumentForm";
 import AddServiceModal from "../components/AddServiceModal";
 import ConfirmModal from "../components/ConfirmModal";
 import { useToast } from "../context/ToastContext";
+import API_BASE_URL from "../api";
 
 function VehicleDetailsPage() {
     const { id } = useParams();
