@@ -1,6 +1,6 @@
 // src/config/api.js
 // Create this new file to centralize API configuration
-const API_BASE_URL = 'fleet-tracking-system-production.up.railway.app';
+const API_BASE_URL = 'https://fleet-tracking-system-production.up.railway.app/api';
 
 export const API_ENDPOINTS = {
   vehicles: `${API_BASE_URL}/api/vehicles`,
