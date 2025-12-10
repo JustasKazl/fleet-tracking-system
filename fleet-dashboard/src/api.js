@@ -1,6 +1,5 @@
 // src/config/api.js
 // Create this new file to centralize API configuration
-
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 export const API_ENDPOINTS = {
@@ -21,7 +20,7 @@ export async function apiCall(url, options = {}) {
     });
 
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      throw new Error(`HTTP error! status: ${response.status}`);  // ✅ Fixed
     }
 
     return await response.json();
