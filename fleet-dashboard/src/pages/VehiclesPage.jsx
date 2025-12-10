@@ -25,7 +25,7 @@ async function loadVehicles() {
     setError(null);
 
     const res = await fetch(
-      '${API_BASE_URL}/vehicles'
+      '${API_BASE_URL}/api/vehicles'
     );
 
     const contentType = res.headers.get("content-type") || "";
@@ -61,7 +61,7 @@ async function performDelete() {
   if (!deleteTarget) return;
 
   try {
-    const res = await fetch(`${API_BASE_URL}/vehicles/${deleteTarget}`, { // ✅ Added (
+    const res = await fetch(`${API_BASE_URL}/api/vehicles/${deleteTarget}`, { // ✅ Added (
       method: "DELETE",
     });
 
