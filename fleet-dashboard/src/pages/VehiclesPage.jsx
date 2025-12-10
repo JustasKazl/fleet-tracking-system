@@ -24,22 +24,7 @@ async function loadVehicles() {
     setLoading(true);
     setError(null);
 
-    const res = await fetch(
-      'https://fleet-tracking-system-production.up.railway.app/api/vehicles'
-    );
-
-    const contentType = res.headers.get("content-type") || "";
-
-    // 🔍 Debug: log non-JSON responses
-    if (!contentType.includes("application/json")) {
-      const text = await res.text();
-      console.error("NOT JSON RESPONSE:", {
-        status: res.status,
-        contentType,
-        bodySnippet: text.slice(0, 300),
-      });
-      throw new Error("Server did not return JSON");
-    }
+    const res = await fetch(`${API_BASE_URL}/api/vehicles`);
 
     if (!res.ok) {
       throw new Error(`Failed to fetch vehicles: ${res.status}`);
@@ -56,12 +41,11 @@ async function loadVehicles() {
   }
 }
 
-
 async function performDelete() {
   if (!deleteTarget) return;
 
   try {
-    const res = await fetch(`https://fleet-tracking-system-production.up.railway.app/api/vehicles/${deleteTarget}`, { // ✅ Added (
+    const res = await fetch(`${API_BASE_URL}/api/vehicles/${deleteTarget}`, {
       method: "DELETE",
     });
 
@@ -69,7 +53,7 @@ async function performDelete() {
       throw new Error("Delete failed");
     }
 
-    setVehicles((prev) => prev.filter((v) => v.id !== deleteTarget));
+    setVehicles(prev => prev.filter(v => v.id !== deleteTarget));
     showToast("Automobilis sėkmingai ištrintas!", "success");
   } catch (err) {
     console.error(err);
@@ -78,6 +62,7 @@ async function performDelete() {
 
   setDeleteTarget(null);
 }
+
 
   return (
     <DashboardLayout>
