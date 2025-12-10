@@ -3,6 +3,7 @@ import DashboardLayout from "../layout/DashboardLayout";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "../context/ToastContext";
 import { carData } from "./carDataShared";
+import API_BASE_URL from "../api";
 
 function AddVehiclePage() {
   const nav = useNavigate();
@@ -35,7 +36,7 @@ function AddVehiclePage() {
     console.log("Payload:", payload);
 
     try {
-      const res = await fetch("http://localhost:5000/api/vehicles", {
+      const res = await fetch('${API_BASE_URL}/api/vehicles', {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
