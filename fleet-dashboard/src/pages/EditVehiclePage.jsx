@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import DashboardLayout from "../layout/DashboardLayout";
 import { useToast } from "../context/ToastContext";
-
+import API_BASE_URL from "../api";
 import { carData } from "./carDataShared";
 
 function EditVehiclePage() {
@@ -22,7 +22,7 @@ function EditVehiclePage() {
   useEffect(() => {
     async function loadVehicle() {
       try {
-        const res = await fetch(`http://localhost:5000/api/vehicles`);
+        const res = await fetch(`${API_BASE_URL}/api/vehicles`);
         const data = await res.json();
         const v = data.find(item => String(item.id) === id);
 
@@ -61,7 +61,7 @@ function EditVehiclePage() {
       status: "offline",
     };
 
-    const res = await fetch(`http://localhost:5000/api/vehicles/${id}`, {
+    const res = await fetch(`${API_BASE_URL}/api/vehicles/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
