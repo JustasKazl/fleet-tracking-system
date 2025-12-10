@@ -23,7 +23,7 @@ async function loadVehicles() {
   try {
     setLoading(true);
     setError(null);
-    const res = await fetch(`fleet-tracking-system-production.up.railway.app/api/vehicles`); // ✅ Added (
+    const res = await fetch(`https://fleet-tracking-system-production.up.railway.app/api/vehicles`);
     
     if (!res.ok) {
       throw new Error(`Failed to fetch vehicles: ${res.status}`); // ✅ Added (
@@ -44,7 +44,7 @@ async function performDelete() {
   if (!deleteTarget) return;
 
   try {
-    const res = await fetch(`fleet-tracking-system-production.up.railway.app/api/vehicles/${deleteTarget}`, { // ✅ Added (
+    const res = await fetch(`https://fleet-tracking-system-production.up.railway.app/api/vehicles/${deleteTarget}`, { // ✅ Added (
       method: "DELETE",
     });
 
