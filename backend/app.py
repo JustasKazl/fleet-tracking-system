@@ -47,72 +47,142 @@ def init_db():
     conn = get_db()
     cur = conn.cursor()
 
-    # Create users table
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS users (
-        id SERIAL PRIMARY KEY,
-        email TEXT UNIQUE NOT NULL,
-        password_hash TEXT NOT NULL,
-        name TEXT NOT NULL,
-        company TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    );
-    """)
+    try:
+        # Create users table
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id SERIAL PRIMARY KEY,
+            email TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            name TEXT NOT NULL,
+            company TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        """)
+        print("✅ users table created/verified")
 
-    # Create vehicles table with user_id foreign key
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS vehicles (
-        id SERIAL PRIMARY KEY,
-        user_id INTEGER NOT NULL,
-        device_id TEXT NOT NULL,
-        brand TEXT,
-        model TEXT,
-        custom_name TEXT,
-        plate TEXT,
-        imei TEXT,
-        fmb_serial TEXT,
-        status TEXT DEFAULT 'unknown',
-        total_km INTEGER DEFAULT 0,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
-    );
-    """)
+        # Create vehicles table with user_id foreign key
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS vehicles (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            device_id TEXT NOT NULL,
+            brand TEXT,
+            model TEXT,
+            custom_name TEXT,
+            plate TEXT,
+            imei TEXT,
+            fmb_serial TEXT,
+            status TEXT DEFAULT 'unknown',
+            total_km INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+        """)
+        print("✅ vehicles table created/verified")
 
-    # Create documents table
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS documents (
-        id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-        vehicle_id INTEGER NOT NULL,
-        doc_type TEXT NOT NULL,
-        title TEXT,
-        file_path TEXT,
-        valid_until TEXT,
-        uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY(vehicle_id) REFERENCES vehicles(id) ON DELETE CASCADE
-    );
-    """)
+        # Create documents table
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS documents (
+            id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+            vehicle_id INTEGER NOT NULL,
+            doc_type TEXT NOT NULL,
+            title TEXT,
+            file_path TEXT,
+            valid_until TEXT,
+            uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(vehicle_id) REFERENCES vehicles(id) ON DELETE CASCADE
+        );
+        """)
+        print("✅ documents table created/verified")
 
-    # Create service_records table
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS service_records (
-        id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-        vehicle_id INTEGER NOT NULL,
-        service_type TEXT NOT NULL,
-        performed_date TEXT NOT NULL,
-        performed_km INTEGER NOT NULL,
-        next_km INTEGER,
-        next_date TEXT,
-        location TEXT,
-        notes TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY(vehicle_id) REFERENCES vehicles(id) ON DELETE CASCADE
-    );
-    """)
+        # Create service_records table
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS service_records (
+            id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+            vehicle_id INTEGER NOT NULL,
+            service_type TEXT NOT NULL,
+            performed_date TEXT NOT NULL,
+            performed_km INTEGER NOT NULL,
+            next_km INTEGER,
+            next_date TEXT,
+            location TEXT,
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(vehicle_id) REFERENCES vehicles(id) ON DELETE CASCADE
+        );
+        """)
+        print("✅ service_records table created/verified")
 
-    conn.commit()
-    cur.close()
-    conn.close()
-    print("✅ Database initialized successfully")
+        conn.commit()
+        print("✅ All tables created successfully")
+
+    except Exception as e:
+        print(f"⚠️ Error during table creation: {e}")
+        conn.rollback()
+        raise
+    finally:
+        cur.close()
+
+def run_migrations():
+    """Run database migrations to ensure schema is up to date"""
+    conn = get_db()
+    cur = conn.cursor()
+
+    try:
+        print("🔍 Checking if vehicles table needs user_id column...")
+        
+        # Check if user_id column exists in vehicles table
+        cur.execute("""
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_name = 'vehicles' AND column_name = 'user_id'
+        """)
+        
+        user_id_exists = cur.fetchone() is not None
+        
+        if not user_id_exists:
+            print("❌ user_id column missing from vehicles table! Adding it now...")
+            
+            # Add user_id column
+            cur.execute("ALTER TABLE vehicles ADD COLUMN user_id INTEGER;")
+            print("✅ Added user_id column")
+            
+            # Assign existing vehicles to user 1
+            cur.execute("UPDATE vehicles SET user_id = 1 WHERE user_id IS NULL;")
+            print("✅ Assigned existing vehicles to user_id = 1")
+            
+            # Make user_id NOT NULL
+            cur.execute("ALTER TABLE vehicles ALTER COLUMN user_id SET NOT NULL;")
+            print("✅ Set user_id as NOT NULL")
+            
+            # Add foreign key constraint if it doesn't exist
+            cur.execute("""
+            SELECT constraint_name 
+            FROM information_schema.table_constraints 
+            WHERE table_name = 'vehicles' AND constraint_name = 'fk_vehicles_user_id'
+            """)
+            
+            if not cur.fetchone():
+                cur.execute("""
+                ALTER TABLE vehicles 
+                ADD CONSTRAINT fk_vehicles_user_id 
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+                """)
+                print("✅ Added foreign key constraint")
+            
+            conn.commit()
+            print("✅ Migration completed successfully!")
+        else:
+            print("✅ user_id column already exists in vehicles table")
+            conn.commit()
+
+    except Exception as e:
+        print(f"❌ Migration error: {e}")
+        conn.rollback()
+        raise
+    finally:
+        cur.close()
 
 
 # ---------------------- HELPERS & MIDDLEWARE -----------------------
@@ -765,6 +835,22 @@ def root():
 # --------------------- MAIN ------------------------
 
 if __name__ == "__main__":
-    init_db()
+    print("=" * 60)
+    print("🚀 FLEETTRACK BACKEND STARTUP")
+    print("=" * 60)
+    
+    try:
+        print("\n1️⃣ Initializing database tables...")
+        init_db()
+        print("\n2️⃣ Running migrations...")
+        run_migrations()
+        print("\n✅ Database ready!")
+        print("=" * 60)
+    except Exception as e:
+        print(f"\n❌ STARTUP FAILED: {e}")
+        print("=" * 60)
+        raise
+    
     port = int(os.environ.get("PORT", 5000))
+    print(f"\n🎯 Starting server on port {port}...\n")
     app.run(host="0.0.0.0", port=port, debug=False)
