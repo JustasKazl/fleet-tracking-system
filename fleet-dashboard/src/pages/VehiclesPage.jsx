@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import DashboardLayout from "../layout/DashboardLayout";
 import VehicleCard from "../components/VehicleCard";
+import VehicleFormModal from "../components/VehicleFormModal";
 import ConfirmModal from "../components/ConfirmModal";
-import { useNavigate } from "react-router-dom";
 import { useToast } from "../context/ToastContext";
 import { useAuth } from "../context/AuthContext";
 import API_BASE_URL from "../api";
@@ -13,8 +13,10 @@ function VehiclesPage() {
   const [error, setError] = useState(null);
   const { showToast } = useToast();
   const { token } = useAuth();
-  const navigate = useNavigate();
 
+  // Modal states
+  const [formModalOpen, setFormModalOpen] = useState(false);
+  const [editingVehicle, setEditingVehicle] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
 
   useEffect(() => {
@@ -76,8 +78,35 @@ function VehiclesPage() {
     setDeleteTarget(null);
   }
 
+  const openAddModal = () => {
+    setEditingVehicle(null);
+    setFormModalOpen(true);
+  };
+
+  const openEditModal = (vehicle) => {
+    setEditingVehicle(vehicle);
+    setFormModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setFormModalOpen(false);
+    setEditingVehicle(null);
+  };
+
+  const handleFormSuccess = () => {
+    loadVehicles();
+  };
+
   return (
     <DashboardLayout>
+      {/* Modals */}
+      <VehicleFormModal
+        isOpen={formModalOpen}
+        onClose={closeModal}
+        onSuccess={handleFormSuccess}
+        vehicle={editingVehicle}
+      />
+
       {deleteTarget !== null && (
         <ConfirmModal
           open={true}
@@ -88,11 +117,12 @@ function VehiclesPage() {
         />
       )}
 
+      {/* Page Header */}
       <div className="vehicles-page-header">
         <div>
           <h1 className="vehicles-page-title">Transporto priemonės</h1>
           <p className="vehicles-page-sub">
-            Valdykite automobilius, FMB130 įrenginius ir dokumentus.
+            Valdykite automobilius, FMB003 įrenginius ir dokumentus.
           </p>
         </div>
 
@@ -103,13 +133,14 @@ function VehiclesPage() {
           />
           <button
             className="btn-primary"
-            onClick={() => navigate("/vehicles/add")}
+            onClick={openAddModal}
           >
             + Pridėti naują auto
           </button>
         </div>
       </div>
 
+      {/* Content */}
       {loading ? (
         <div style={{ padding: 20, textAlign: 'center' }}>
           <div className="loading-spinner">Kraunama...</div>
@@ -130,6 +161,14 @@ function VehiclesPage() {
           {vehicles.length === 0 ? (
             <div style={{ padding: 20, opacity: 0.7 }}>
               Nėra įtrauktų transporto priemonių.
+              <br />
+              <button 
+                className="btn-primary" 
+                style={{ marginTop: 10 }}
+                onClick={openAddModal}
+              >
+                Pridėti pirmąjį automobilį
+              </button>
             </div>
           ) : (
             vehicles.map((v) => (
