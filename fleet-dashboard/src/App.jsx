@@ -1,20 +1,49 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import LandingPage from "./pages/LandingPage";
 import Dashboard from "./pages/Dashboard";
 import VehiclesPage from "./pages/VehiclesPage";
 import AddVehiclePage from "./pages/AddVehiclePage";
 import EditVehiclePage from "./pages/EditVehiclePage";
 import VehicleDetailsPage from "./pages/VehicleDetailsPage";
+import TermsOfService from "./pages/TermsOfService";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
 
 function App() {
+  // TODO: Replace with real authentication check
+  const isAuthenticated = false;
+
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<Dashboard />} />
+        {/* Public Routes */}
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/terms" element={<TermsOfService />} />
+        <Route path="/privacy" element={<PrivacyPolicy />} />
 
-        <Route path="/vehicles" element={<VehiclesPage />} />
-        <Route path="/vehicles/add" element={<AddVehiclePage />} />
-        <Route path="/vehicles/edit/:id" element={<EditVehiclePage />} />
-        <Route path="/vehicles/:id" element={<VehicleDetailsPage />} />
+        {/* Protected Routes - Redirect to landing if not authenticated */}
+        <Route 
+          path="/dashboard" 
+          element={isAuthenticated ? <Dashboard /> : <Navigate to="/" replace />} 
+        />
+        <Route 
+          path="/vehicles" 
+          element={isAuthenticated ? <VehiclesPage /> : <Navigate to="/" replace />} 
+        />
+        <Route 
+          path="/vehicles/add" 
+          element={isAuthenticated ? <AddVehiclePage /> : <Navigate to="/" replace />} 
+        />
+        <Route 
+          path="/vehicles/edit/:id" 
+          element={isAuthenticated ? <EditVehiclePage /> : <Navigate to="/" replace />} 
+        />
+        <Route 
+          path="/vehicles/:id" 
+          element={isAuthenticated ? <VehicleDetailsPage /> : <Navigate to="/" replace />} 
+        />
+
+        {/* Fallback */}
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
   );
