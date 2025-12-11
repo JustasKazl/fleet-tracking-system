@@ -6,7 +6,7 @@ import AddVehiclePage from "./pages/AddVehiclePage";
 import EditVehiclePage from "./pages/EditVehiclePage";
 import VehicleDetailsPage from "./pages/VehicleDetailsPage";
 import TermsOfService from "./pages/TermsOfService";
-import PrivacyPolicy from "./pages/PrivacyPolicy";
+import PrivacyPolicy from "./pages/Privacy";
 
 function App() {
   // TODO: Replace with real authentication check
