@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import DashboardLayout from "../layout/DashboardLayout";
 import { useToast } from "../context/ToastContext";
+import { useAuth } from "../context/AuthContext";
 import API_BASE_URL from "../api";
 import { carData } from "./carDataShared";
 
@@ -9,6 +10,7 @@ function EditVehiclePage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { showToast } = useToast();
+  const { token } = useAuth();
 
   const [loading, setLoading] = useState(true);
 
@@ -22,7 +24,12 @@ function EditVehiclePage() {
   useEffect(() => {
     async function loadVehicle() {
       try {
-        const res = await fetch(`${API_BASE_URL}/api/vehicles`);
+        const res = await fetch(`${API_BASE_URL}/api/vehicles`, {
+          headers: {
+            "Authorization": `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        });
         const data = await res.json();
         const v = data.find(item => String(item.id) === id);
 
@@ -39,13 +46,16 @@ function EditVehiclePage() {
         setFmbSerial(v.fmb_serial);
         setOdo(v.total_km || 0);
       } catch (err) {
+        console.error(err);
         showToast("Klaida kraunant duomenis", "error");
       }
       setLoading(false);
     }
 
-    loadVehicle();
-  }, [id]);
+    if (token) {
+      loadVehicle();
+    }
+  }, [id, token]);
 
   async function handleSave(e) {
     e.preventDefault();
@@ -63,7 +73,10 @@ function EditVehiclePage() {
 
     const res = await fetch(`${API_BASE_URL}/api/vehicles/${id}`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify(payload),
     });
 
