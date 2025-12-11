@@ -1035,6 +1035,175 @@ body {
   background: rgba(242, 230, 59, 0.1);
 }
 
+/* ─────── SERVER STATUS INDICATOR ───────── */
+
+.server-status-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.server-status-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: all 0.2s;
+  font-size: 13px;
+}
+
+.server-status-button:hover {
+  background: rgba(102, 126, 234, 0.1);
+  color: var(--text-main);
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  transition: all 0.3s;
+  animation: pulse-dot 2s infinite;
+}
+
+.status-dot.online {
+  animation: pulse-dot-online 2s infinite;
+}
+
+.status-dot.offline {
+  animation: none;
+}
+
+.status-dot.checking {
+  animation: pulse-dot-checking 1s infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { 
+    opacity: 1;
+  }
+  50% { 
+    opacity: 0.6;
+  }
+}
+
+@keyframes pulse-dot-online {
+  0%, 100% { 
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% { 
+    opacity: 0.6;
+    transform: scale(1.2);
+  }
+}
+
+@keyframes pulse-dot-checking {
+  0%, 100% { 
+    opacity: 1;
+  }
+  50% { 
+    opacity: 0.4;
+  }
+}
+
+.server-status-text {
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+/* ─────── TOOLTIP ───────── */
+
+.server-status-tooltip {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 12px;
+  background: var(--bg-elevated-soft);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 14px;
+  min-width: 220px;
+  z-index: 1000;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(10px);
+  animation: tooltipFadeIn 0.2s ease-out;
+}
+
+@keyframes tooltipFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.tooltip-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  font-size: 12px;
+}
+
+.tooltip-row:not(:last-child) {
+  border-bottom: 1px solid var(--border-light);
+}
+
+.tooltip-label {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.tooltip-value {
+  color: var(--text-main);
+  font-weight: 600;
+  font-family: 'Monaco', 'Courier New', monospace;
+}
+
+.tooltip-value.status-online {
+  color: var(--good);
+}
+
+.tooltip-value.status-offline {
+  color: var(--bad);
+}
+
+.tooltip-value.status-checking {
+  color: var(--warn);
+}
+
+.tooltip-info {
+  opacity: 0.7;
+  font-size: 11px;
+}
+
+.tooltip-info .tooltip-label {
+  font-weight: 500;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .server-status-tooltip {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    left: auto;
+    top: auto;
+    margin: 0;
+    min-width: 240px;
+  }
+}
+
 @keyframes slideIn {
   from {
     opacity: 0;
