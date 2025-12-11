@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 
 function DashboardLayout({ children }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, logout } = useAuth();
   const { showToast } = useToast();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -21,8 +22,12 @@ function DashboardLayout({ children }) {
     setSidebarOpen((prev) => !prev);
   };
 
+  // Helper function to check if a route is active
+  const isActive = (path) => {
+    return location.pathname === path || location.pathname.startsWith(path + "/");
+  };
+
   const handleUserMenuClick = (action) => {
-    console.log("User menu:", action);
     setUserMenuOpen(false);
 
     if (action === "logout") {
@@ -37,7 +42,6 @@ function DashboardLayout({ children }) {
   };
 
   const handleSidebarItemClick = (target) => {
-    console.log("Sidebar nav:", target);
     setSidebarOpen(false);
 
     if (target === "dashboard") {
@@ -45,10 +49,13 @@ function DashboardLayout({ children }) {
     } else if (target === "vehicles") {
       navigate("/vehicles");
     } else if (target === "trips") {
-      // kol kas niekur neveda, vėliau pridėsim
+      showToast("Nebaigta - netrukus bus prieinamas", "warning");
     } else if (target === "alerts") {
+      showToast("Nebaigta - netrukus bus prieinamas", "warning");
     } else if (target === "reports") {
+      showToast("Nebaigta - netrukus bus prieinamas", "warning");
     } else if (target === "settings") {
+      showToast("Nebaigta - netrukus bus prieinamas", "warning");
     } else if (target === "logout") {
       logout();
       showToast("Atsijungėte sėkmingai", "success");
@@ -56,14 +63,12 @@ function DashboardLayout({ children }) {
     }
   };
 
-  // Uždaryti dropdown ir sidebar paspaudus šalia arba ESC
+  // Close dropdown and sidebar on click outside
   useEffect(() => {
     function handleClickOutside(e) {
-      // user dropdown
       if (userMenuRef.current && !userMenuRef.current.contains(e.target)) {
         setUserMenuOpen(false);
       }
-      // sidebar
       if (
         sidebarRef.current &&
         !sidebarRef.current.contains(e.target) &&
@@ -96,7 +101,7 @@ function DashboardLayout({ children }) {
 
   return (
     <div className="page">
-      {/* ŠONINIS MENIU (sidebar) */}
+      {/* SIDEBAR WITH ACTIVE STATE */}
       {sidebarOpen && (
         <div className="sidebar-backdrop">
           <nav className="sidebar" ref={sidebarRef}>
@@ -113,67 +118,78 @@ function DashboardLayout({ children }) {
 
             <div className="sidebar-section">
               <div className="sidebar-section-label">Puslapiai</div>
+              
               <button
                 type="button"
-                className="sidebar-item sidebar-item-active"
+                className={`sidebar-item ${isActive("/dashboard") ? "sidebar-item-active" : ""}`}
                 onClick={() => handleSidebarItemClick("dashboard")}
               >
-                Dashboard
+                📊 Dashboard
               </button>
+              
               <button
                 type="button"
-                className="sidebar-item"
+                className={`sidebar-item ${
+                  isActive("/vehicles") && !isActive("/vehicles/add") && !location.pathname.includes("/vehicles/edit") && !location.pathname.includes("/vehicles/") 
+                    ? "sidebar-item-active" 
+                    : ""
+                }`}
                 onClick={() => handleSidebarItemClick("vehicles")}
               >
-                Transporto priemonės
+                🚗 Transporto priemonės
               </button>
+              
               <button
                 type="button"
                 className="sidebar-item"
                 onClick={() => handleSidebarItemClick("trips")}
               >
-                Kelionių istorija
+                📍 Kelionių istorija
               </button>
+              
               <button
                 type="button"
                 className="sidebar-item"
                 onClick={() => handleSidebarItemClick("alerts")}
               >
-                Įspėjimai
+                🔔 Įspėjimai
               </button>
+              
               <button
                 type="button"
                 className="sidebar-item"
                 onClick={() => handleSidebarItemClick("reports")}
               >
-                Ataskaitos
+                📈 Ataskaitos
               </button>
             </div>
 
             <div className="sidebar-section">
               <div className="sidebar-section-label">Vartotojas</div>
+              
               <button
                 type="button"
                 className="sidebar-item"
                 onClick={() => handleSidebarItemClick("settings")}
               >
-                Nustatymai
+                ⚙️ Nustatymai
               </button>
+              
               <button
                 type="button"
                 className="sidebar-item sidebar-item-danger"
                 onClick={() => handleSidebarItemClick("logout")}
               >
-                Atsijungti
+                🚪 Atsijungti
               </button>
             </div>
           </nav>
         </div>
       )}
 
-      {/* VIRŠUTINĖ JUOSTA */}
+      {/* TOPBAR */}
       <header className="topbar">
-        {/* Kairė – burger + pavadinimas */}
+        {/* LEFT SIDE */}
         <div className="topbar-left">
           <button
             type="button"
@@ -186,15 +202,22 @@ function DashboardLayout({ children }) {
           </button>
 
           <div className="topbar-main">
-            <div className="topbar-title">Transporto stebėjimo sistema</div>
-            <div className="topbar-sub">Pagrindinis valdymo skydelis</div>
+            <div className="topbar-title">FleetTrack</div>
+            <div className="topbar-sub">
+              {location.pathname === "/dashboard" && "Pagrindinis valdymo skydelis"}
+              {location.pathname === "/vehicles" && "Transporto priemonių sąrašas"}
+              {location.pathname === "/vehicles/add" && "Pridėti naują automobilį"}
+              {location.pathname.includes("/vehicles/edit/") && "Redaguoti automobilį"}
+              {location.pathname.includes("/vehicles/") && !location.pathname.includes("/edit") && !location.pathname === "/vehicles/add" && "Transporto priemonės detalės"}
+              {!location.pathname.startsWith("/vehicles") && !location.pathname.startsWith("/dashboard") && "Valdymo skydelis"}
+            </div>
           </div>
         </div>
 
-        {/* Dešinė – serverio statusas + vartotojo meniu */}
+        {/* RIGHT SIDE */}
         <div className="topbar-right">
           <span className="status-dot"></span>
-          <span>Serveris online</span>
+          <span className="server-status">Serveris online</span>
 
           <div className="user-menu-wrapper" ref={userMenuRef}>
             <button
@@ -205,28 +228,26 @@ function DashboardLayout({ children }) {
               <div className="user-avatar">{userName.charAt(0).toUpperCase()}</div>
               <div className="user-text">
                 <div className="user-name">{userName}</div>
-                <div className="user-role">Naudotojas</div>
+                <div className="user-role">Vartotojas</div>
               </div>
             </button>
 
             {userMenuOpen && (
               <div className="user-menu-dropdown">
-                <div style={{ padding: '8px', borderBottom: '1px solid rgba(255,255,255,0.1)', fontSize: '12px', color: 'var(--text-muted)' }}>
-                  {userEmail}
-                </div>
+                <div className="user-menu-email">{userEmail}</div>
                 <button
                   type="button"
                   className="user-menu-item"
                   onClick={() => handleUserMenuClick("profilis")}
                 >
-                  Profilis
+                  👤 Profilis
                 </button>
                 <button
                   type="button"
                   className="user-menu-item"
                   onClick={() => handleUserMenuClick("nustatymai")}
                 >
-                  Nustatymai
+                  ⚙️ Nustatymai
                 </button>
                 <div className="user-menu-separator" />
                 <button
@@ -234,7 +255,7 @@ function DashboardLayout({ children }) {
                   className="user-menu-item user-menu-danger"
                   onClick={() => handleUserMenuClick("logout")}
                 >
-                  Atsijungti
+                  🚪 Atsijungti
                 </button>
               </div>
             )}
@@ -242,6 +263,7 @@ function DashboardLayout({ children }) {
         </div>
       </header>
 
+      {/* PAGE CONTENT */}
       {children}
     </div>
   );
