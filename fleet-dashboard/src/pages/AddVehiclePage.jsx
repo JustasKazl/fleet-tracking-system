@@ -2,12 +2,14 @@ import { useState } from "react";
 import DashboardLayout from "../layout/DashboardLayout";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "../context/ToastContext";
+import { useAuth } from "../context/AuthContext";
 import { carData } from "./carDataShared";
 import API_BASE_URL from "../api";
 
 function AddVehiclePage() {
   const nav = useNavigate();
   const { showToast } = useToast();
+  const { token } = useAuth();
 
   // Formos state
   const [brand, setBrand] = useState("");
@@ -38,7 +40,10 @@ function AddVehiclePage() {
     try {
       const res = await fetch(`${API_BASE_URL}/api/vehicles`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify(payload),
       });
 
