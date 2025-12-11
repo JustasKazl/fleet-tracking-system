@@ -2,7 +2,7 @@
 import { Link } from 'react-router-dom';
 import '../styles/legal.css';
 
-export function TermsOfService() {
+function TermsOfService() {
   return (
     <div className="legal-page">
       <div className="legal-container">
@@ -104,8 +104,13 @@ export function TermsOfService() {
   );
 }
 
+export default TermsOfService;
+
 // fleet-dashboard/src/pages/PrivacyPolicy.jsx
-export function PrivacyPolicy() {
+import { Link } from 'react-router-dom';
+import '../styles/legal.css';
+
+function PrivacyPolicy() {
   return (
     <div className="legal-page">
       <div className="legal-container">
@@ -221,4 +226,4 @@ export function PrivacyPolicy() {
   );
 }
 
-export default { TermsOfService, PrivacyPolicy };
+export default PrivacyPolicy;
