@@ -4,6 +4,7 @@ import VehicleCard from "../components/VehicleCard";
 import ConfirmModal from "../components/ConfirmModal";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "../context/ToastContext";
+import { useAuth } from "../context/AuthContext";
 import API_BASE_URL from "../api";
 
 function VehiclesPage() {
@@ -11,58 +12,69 @@ function VehiclesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const { showToast } = useToast();
+  const { token } = useAuth();
   const navigate = useNavigate();
 
   const [deleteTarget, setDeleteTarget] = useState(null);
 
   useEffect(() => {
-    loadVehicles();
-  }, []);
-
-async function loadVehicles() {
-  try {
-    setLoading(true);
-    setError(null);
-
-    const res = await fetch(`${API_BASE_URL}/api/vehicles`);
-
-    if (!res.ok) {
-      throw new Error(`Failed to fetch vehicles: ${res.status}`);
+    if (token) {
+      loadVehicles();
     }
+  }, [token]);
 
-    const data = await res.json();
-    setVehicles(data);
-  } catch (err) {
-    console.error("Failed to load vehicles:", err);
-    setError(err.message);
-    showToast("Nepavyko užkrauti automobilių", "error");
-  } finally {
-    setLoading(false);
-  }
-}
+  async function loadVehicles() {
+    try {
+      setLoading(true);
+      setError(null);
 
-async function performDelete() {
-  if (!deleteTarget) return;
+      const res = await fetch(`${API_BASE_URL}/api/vehicles`, {
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
 
-  try {
-    const res = await fetch(`${API_BASE_URL}/api/vehicles/${deleteTarget}`, {
-      method: "DELETE",
-    });
+      if (!res.ok) {
+        throw new Error(`Failed to fetch vehicles: ${res.status}`);
+      }
 
-    if (!res.ok) {
-      throw new Error("Delete failed");
+      const data = await res.json();
+      setVehicles(data);
+    } catch (err) {
+      console.error("Failed to load vehicles:", err);
+      setError(err.message);
+      showToast("Nepavyko užkrauti automobilių", "error");
+    } finally {
+      setLoading(false);
     }
-
-    setVehicles(prev => prev.filter(v => v.id !== deleteTarget));
-    showToast("Automobilis sėkmingai ištrintas!", "success");
-  } catch (err) {
-    console.error(err);
-    showToast("Nepavyko ištrinti automobilio", "error");
   }
 
-  setDeleteTarget(null);
-}
+  async function performDelete() {
+    if (!deleteTarget) return;
 
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/vehicles/${deleteTarget}`, {
+        method: "DELETE",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!res.ok) {
+        throw new Error("Delete failed");
+      }
+
+      setVehicles(prev => prev.filter(v => v.id !== deleteTarget));
+      showToast("Automobilis sėkmingai ištrintas!", "success");
+    } catch (err) {
+      console.error(err);
+      showToast("Nepavyko ištrinti automobilio", "error");
+    }
+
+    setDeleteTarget(null);
+  }
 
   return (
     <DashboardLayout>
