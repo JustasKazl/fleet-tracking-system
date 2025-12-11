@@ -1,0 +1,201 @@
+/* Add these styles to your styles.css file */
+
+/* MODAL OVERLAY */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  animation: fadeIn 0.2s;
+  padding: 20px;
+}
+
+/* MODAL CARD */
+.modal-card {
+  width: 600px;
+  max-width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+  background: linear-gradient(135deg, rgba(26, 15, 46, 0.9) 0%, rgba(20, 8, 36, 0.8) 100%);
+  border: 1px solid var(--border-color);
+  padding: 28px;
+  border-radius: 14px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(10px);
+  animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* MODAL HEADER */
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.modal-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.modal-close-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 28px;
+  cursor: pointer;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.modal-close-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-main);
+}
+
+/* MODAL FORM */
+.modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-field label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-main);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.form-field input,
+.form-field select {
+  background: rgba(10, 1, 24, 0.5);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 11px 12px;
+  color: var(--text-main);
+  font-size: 14px;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.form-field input::placeholder {
+  color: var(--text-muted);
+}
+
+.form-field input:focus,
+.form-field select:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: rgba(10, 1, 24, 0.7);
+  box-shadow: 0 0 16px rgba(102, 126, 234, 0.2);
+}
+
+.form-field input:disabled,
+.form-field select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background: rgba(10, 1, 24, 0.3);
+}
+
+/* FORM ROW (2 columns) */
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+/* MODAL BUTTONS */
+.modal-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-light);
+}
+
+.modal-buttons .btn-ghost,
+.modal-buttons .btn-primary {
+  min-width: 120px;
+}
+
+/* Scrollbar styling for modal */
+.modal-card::-webkit-scrollbar {
+  width: 6px;
+}
+
+.modal-card::-webkit-scrollbar-track {
+  background: rgba(102, 126, 234, 0.05);
+  border-radius: 10px;
+}
+
+.modal-card::-webkit-scrollbar-thumb {
+  background: rgba(102, 126, 234, 0.3);
+  border-radius: 10px;
+}
+
+.modal-card::-webkit-scrollbar-thumb:hover {
+  background: rgba(102, 126, 234, 0.5);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .modal-card {
+    width: 100%;
+    max-height: 100vh;
+    border-radius: 12px 12px 0 0;
+    padding: 20px;
+  }
+
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .modal-buttons {
+    flex-direction: column-reverse;
+  }
+
+  .modal-buttons button {
+    width: 100%;
+  }
+}
+
+/* Fade in animation */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
