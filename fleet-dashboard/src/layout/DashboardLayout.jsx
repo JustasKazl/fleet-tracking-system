@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
+import ServerStatus from "../components/ServerStatus";
 
 function DashboardLayout({ children }) {
   const navigate = useNavigate();
@@ -26,6 +27,9 @@ function DashboardLayout({ children }) {
   const isActive = (path) => {
     return location.pathname === path || location.pathname.startsWith(path + "/");
   };
+
+  // Check if on main vehicles list page only
+  const isVehiclesListPage = location.pathname === "/vehicles";
 
   const handleUserMenuClick = (action) => {
     setUserMenuOpen(false);
@@ -127,10 +131,9 @@ function DashboardLayout({ children }) {
                 📊 Dashboard
               </button>
               
-              {/* FIX: Simplified vehicles button logic */}
               <button
                 type="button"
-                className={`sidebar-item ${isActive("/vehicles") ? "sidebar-item-active" : ""}`}
+                className={`sidebar-item ${isVehiclesListPage ? "sidebar-item-active" : ""}`}
                 onClick={() => handleSidebarItemClick("vehicles")}
               >
                 🚗 Transporto priemonės
@@ -205,7 +208,7 @@ function DashboardLayout({ children }) {
               {location.pathname === "/vehicles" && "Transporto priemonių sąrašas"}
               {location.pathname === "/vehicles/add" && "Pridėti naują automobilį"}
               {location.pathname.includes("/vehicles/edit/") && "Redaguoti automobilį"}
-              {location.pathname.includes("/vehicles/") && !location.pathname.includes("/edit") && !location.pathname === "/vehicles/add" && "Transporto priemonės detalės"}
+              {location.pathname.includes("/vehicles/") && !location.pathname.includes("/edit") && location.pathname !== "/vehicles/add" && "Transporto priemonės detalės"}
               {!location.pathname.startsWith("/vehicles") && !location.pathname.startsWith("/dashboard") && "Valdymo skydelis"}
             </div>
           </div>
@@ -213,8 +216,8 @@ function DashboardLayout({ children }) {
 
         {/* RIGHT SIDE */}
         <div className="topbar-right">
-          <span className="status-dot"></span>
-          <span className="server-status">Serveris online</span>
+          {/* SERVER STATUS INDICATOR */}
+          <ServerStatus />
 
           <div className="user-menu-wrapper" ref={userMenuRef}>
             <button
