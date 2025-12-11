@@ -738,7 +738,7 @@ body {
   font-size: 13px;
   min-width: 280px;
   transition: all 0.2s;
-  backdrop-filter: none;
+  backdrop-filter: blur(8px);
   z-index: 1;
 }
 
@@ -1969,6 +1969,8 @@ body {
 
   .vehicles-page-actions {
     width: 100%;
+
+    position:relative;
   }
 
   .vehicles-search {
