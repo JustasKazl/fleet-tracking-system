@@ -5,11 +5,13 @@ import AddDocumentForm from "../components/AddDocumentForm";
 import AddServiceModal from "../components/AddServiceModal";
 import ConfirmModal from "../components/ConfirmModal";
 import { useToast } from "../context/ToastContext";
+import { useAuth } from "../context/AuthContext";
 import API_BASE_URL from "../api";
 
 function VehicleDetailsPage() {
     const { id } = useParams();
     const { showToast } = useToast();
+    const { token } = useAuth();
 
     const [vehicle, setVehicle] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -22,25 +24,46 @@ function VehicleDetailsPage() {
 
     // ---------------------- LOAD VEHICLE ----------------------
     useEffect(() => {
-        fetch(`${API_BASE_URL}/api/vehicles/${id}`)
+        if (!token) return;
+        
+        fetch(`${API_BASE_URL}/api/vehicles/${id}`, {
+            headers: {
+                "Authorization": `Bearer ${token}`,
+            },
+        })
             .then(res => res.json())
             .then(data => setVehicle(data))
+            .catch(err => console.error(err))
             .finally(() => setLoading(false));
-    }, [id]);
+    }, [id, token]);
 
     // ---------------------- LOAD DOCUMENTS ----------------------
     async function loadDocuments() {
-        const res = await fetch(`${API_BASE_URL}/api/vehicles/${id}/documents`);
+        if (!token) return;
+        const res = await fetch(`${API_BASE_URL}/api/vehicles/${id}/documents`, {
+            headers: {
+                "Authorization": `Bearer ${token}`,
+            },
+        });
         setDocuments(await res.json());
     }
-    useEffect(() => { loadDocuments(); }, [id]);
+    useEffect(() => { 
+        if (token) loadDocuments(); 
+    }, [id, token]);
 
     // ---------------------- LOAD SERVICE RECORDS ----------------------
     async function loadService() {
-        const res = await fetch(`${API_BASE_URL}/api/vehicles/${id}/service`);
+        if (!token) return;
+        const res = await fetch(`${API_BASE_URL}/api/vehicles/${id}/service`, {
+            headers: {
+                "Authorization": `Bearer ${token}`,
+            },
+        });
         setServiceRecords(await res.json());
     }
-    useEffect(() => { loadService(); }, [id]);
+    useEffect(() => { 
+        if (token) loadService(); 
+    }, [id, token]);
 
 
     if (loading) return <DashboardLayout>Kraunama...</DashboardLayout>;
@@ -237,11 +260,17 @@ function VehicleDetailsPage() {
                         if (confirmDelete.type === "document") {
                             await fetch(`${API_BASE_URL}/api/documents/${confirmDelete.id}`, {
                                 method: "DELETE",
+                                headers: {
+                                    "Authorization": `Bearer ${token}`,
+                                },
                             });
                             loadDocuments();
                         } else {
                             await fetch(`${API_BASE_URL}/api/service/${confirmDelete.id}`, {
                                 method: "DELETE",
+                                headers: {
+                                    "Authorization": `Bearer ${token}`,
+                                },
                             });
                             loadService();
                         }
