@@ -144,7 +144,26 @@ body {
 .user-menu-wrapper {
   position: relative;
 }
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
 
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 24px 28px;
+  border-bottom: 1px solid var(--border-light);
+  flex-shrink: 0;
+  gap: 20px;
+}
 .user-info {
   display: flex;
   align-items: center;
@@ -1219,24 +1238,31 @@ body {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(4px);
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 2000;
-  animation: fadeIn 0.2s;
+  animation: fadeIn 0.25s ease-out;
+  padding: 20px;
 }
 
 .modal-card {
-  width: 480px;
-  max-width: 90%;
-  background: linear-gradient(135deg, rgba(26, 15, 46, 0.9) 0%, rgba(20, 8, 36, 0.8) 100%);
+  width: 100%;
+  max-width: 600px;
+  max-height: 90vh;
+  background: linear-gradient(135deg, rgba(26, 15, 46, 0.95) 0%, rgba(20, 8, 36, 0.9) 100%);
   border: 1px solid var(--border-color);
-  padding: 28px;
   border-radius: 14px;
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6);
+  box-shadow: 
+    0 25px 50px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(102, 126, 234, 0.1);
   backdrop-filter: blur(10px);
+  animation: slideUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .modal-card h2 {
@@ -1309,11 +1335,237 @@ body {
 }
 
 .modal-title {
-  margin: 0 0 12px 0;
+  margin: 0;
   font-size: 20px;
   font-weight: 700;
+  color: var(--text-main);
+  line-height: 1.2;
+  letter-spacing: -0.3px;
+}
+.modal-close-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 20px;
+  cursor: pointer;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  flex-shrink: 0;
+  line-height: 1;
+  font-weight: 300;
+  opacity: 0.7;
 }
 
+.modal-close-btn:hover {
+  background: rgba(102, 126, 234, 0.12);
+  color: var(--text-main);
+  opacity: 1;
+}
+
+.modal-close-btn:active {
+  transform: scale(0.92);
+}
+
+/* ─────── MODAL FORM ─────── */
+.modal-form {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  
+  /* Scrollbar styling */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(102, 126, 234, 0.3) transparent;
+}
+
+.modal-form::-webkit-scrollbar {
+  width: 6px;
+}
+
+.modal-form::-webkit-scrollbar-track {
+  background: transparent;
+  margin-right: 2px;
+}
+
+.modal-form::-webkit-scrollbar-thumb {
+  background: rgba(102, 126, 234, 0.25);
+  border-radius: 3px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.modal-form::-webkit-scrollbar-thumb:hover {
+  background: rgba(102, 126, 234, 0.4);
+  background-clip: padding-box;
+}
+
+/* Add padding to first/last items in form */
+.modal-form > :first-child {
+  margin-top: 24px;
+}
+
+.modal-form > :last-child {
+  margin-bottom: 24px;
+}
+
+/* ─────── FORM FIELDS ─────── */
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-field label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-main);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.form-field input,
+.form-field select {
+  background: rgba(10, 1, 24, 0.5);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 11px 12px;
+  color: var(--text-main);
+  font-size: 14px;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.form-field input::placeholder {
+  color: var(--text-muted);
+}
+
+.form-field input:focus,
+.form-field select:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: rgba(10, 1, 24, 0.7);
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+}
+
+.form-field input:disabled,
+.form-field select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background: rgba(10, 1, 24, 0.3);
+}
+
+/* Form Row - 2 columns */
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+/* ─────── MODAL BUTTONS ─────── */
+.modal-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 24px 28px;
+  border-top: 1px solid var(--border-light);
+  flex-shrink: 0;
+  background: rgba(10, 1, 24, 0.2);
+}
+
+.modal-buttons button {
+  min-width: 100px;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+}
+
+.modal-buttons .btn-ghost {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-main);
+  border: 1px solid var(--border-color);
+}
+
+.modal-buttons .btn-ghost:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(102, 126, 234, 0.4);
+}
+
+.modal-buttons .btn-primary {
+  background: linear-gradient(135deg, var(--accent), var(--accent-alt));
+  color: white;
+  box-shadow: 0 6px 16px rgba(102, 126, 234, 0.3);
+}
+
+.modal-buttons .btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4);
+}
+
+.modal-buttons .btn-primary:active {
+  transform: translateY(0);
+}
+
+/* ═════════════════════════════════════════════════════════════ */
+
+/* RESPONSIVE */
+@media (max-width: 768px) {
+  .modal-overlay {
+    padding: 12px;
+  }
+
+  .modal-card {
+    width: 100%;
+    max-height: calc(100vh - 24px);
+    border-radius: 12px;
+  }
+
+  .modal-header {
+    padding: 20px 20px;
+  }
+
+  .modal-title {
+    font-size: 18px;
+  }
+
+  .modal-close-btn {
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    min-height: 28px;
+    font-size: 18px;
+  }
+
+  .modal-form {
+    padding: 0 20px;
+  }
+
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .modal-buttons {
+    padding: 20px 20px;
+    flex-direction: column-reverse;
+  }
+
+  .modal-buttons button {
+    width: 100%;
+  }
+}
 .modal-message {
   margin-bottom: 20px;
   line-height: 1.5;
@@ -1625,14 +1877,12 @@ body {
   animation: fadeInUp 0.3s ease-out;
 }
 
-@keyframes fadeInUp {
+@keyframes fadeIn {
   from {
     opacity: 0;
-    transform: translateY(2px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
   }
 }
 
