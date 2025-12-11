@@ -35,6 +35,17 @@ function VehicleCard({ vehicle, onDelete }) {
 
   const avatarLetter = brand?.[0]?.toUpperCase() || "?";
   const navigate = useNavigate();
+
+  // Helper function to format the date nicely
+  const formatDate = (dateString) => {
+    if (!dateString) return "-";
+    try {
+      return new Date(dateString).toLocaleDateString('lt-LT');
+    } catch (e) {
+      return "-";
+    }
+  };
+
   return (
     <div className="vehicle-card">
       <div className="vehicle-card-top">
@@ -75,7 +86,7 @@ function VehicleCard({ vehicle, onDelete }) {
         <div className="vehicle-meta-item">
           <div className="vehicle-meta-label">Aktyvus nuo</div>
           <div className="vehicle-meta-value">
-            {created_at ? created_at.split("T")[0] : "-"}
+            {formatDate(created_at)}
           </div>
         </div>
       </div>
