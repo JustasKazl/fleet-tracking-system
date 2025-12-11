@@ -740,6 +740,7 @@ body {
   transition: all 0.2s;
   backdrop-filter: blur(8px);
   z-index: 1;
+  position:relative;
 }
 
 .vehicles-search::placeholder {
