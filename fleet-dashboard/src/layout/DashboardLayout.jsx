@@ -127,13 +127,10 @@ function DashboardLayout({ children }) {
                 📊 Dashboard
               </button>
               
+              {/* FIX: Simplified vehicles button logic */}
               <button
                 type="button"
-                className={`sidebar-item ${
-                  isActive("/vehicles") && !isActive("/vehicles/add") && !location.pathname.includes("/vehicles/edit") && !location.pathname.includes("/vehicles/") 
-                    ? "sidebar-item-active" 
-                    : ""
-                }`}
+                className={`sidebar-item ${isActive("/vehicles") ? "sidebar-item-active" : ""}`}
                 onClick={() => handleSidebarItemClick("vehicles")}
               >
                 🚗 Transporto priemonės
