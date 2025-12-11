@@ -738,7 +738,7 @@ body {
   font-size: 13px;
   min-width: 280px;
   transition: all 0.2s;
-  backdrop-filter: blur(8px);
+  backdrop-filter: none;
   z-index: 1;
 }
 
