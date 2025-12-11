@@ -1,11 +1,15 @@
-// fleet-dashboard/src/pages/LandingPage.jsx
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import '../styles/landing.css';
 
 function LandingPage() {
   const navigate = useNavigate();
+  const { login, register } = useAuth();
+  const { showToast } = useToast();
   const [showAuthModal, setShowAuthModal] = useState(null);
+  const [loading, setLoading] = useState(false);
   const [authForm, setAuthForm] = useState({
     email: '',
     password: '',
@@ -13,13 +17,34 @@ function LandingPage() {
     company: ''
   });
 
-  const handleAuth = (e) => {
+  const handleAuth = async (e) => {
     e.preventDefault();
-    // TODO: Implement actual authentication
-    console.log('Auth attempt:', showAuthModal, authForm);
-    
-    // For demo, just navigate to dashboard
-    navigate('/dashboard');
+    setLoading(true);
+
+    try {
+      let result;
+
+      if (showAuthModal === 'login') {
+        result = await login(authForm.email, authForm.password);
+      } else {
+        result = await register(authForm.email, authForm.password, authForm.name, authForm.company);
+      }
+
+      if (result.ok) {
+        showToast(
+          showAuthModal === 'login' ? 'Prisijungę sėkmingai!' : 'Registracija sėkminga!',
+          'success'
+        );
+        closeModal();
+        navigate('/dashboard');
+      } else {
+        showToast(result.error || 'Klaida', 'error');
+      }
+    } catch (err) {
+      showToast('Klaida: ' + err.message, 'error');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const closeModal = () => {
@@ -231,7 +256,7 @@ function LandingPage() {
 
           <div className="footer-section">
             <h4>Įmonė</h4>
-            <a href="/about">Apie mus</a>
+            <a href="#about">Apie mus</a>
             <a href="#contact">Kontaktai</a>
             <a href="/blog">Naujienos</a>
           </div>
@@ -269,6 +294,7 @@ function LandingPage() {
                       value={authForm.name}
                       onChange={(e) => setAuthForm({...authForm, name: e.target.value})}
                       placeholder="Jonas Jonaitis"
+                      disabled={loading}
                     />
                   </div>
 
@@ -279,6 +305,7 @@ function LandingPage() {
                       value={authForm.company}
                       onChange={(e) => setAuthForm({...authForm, company: e.target.value})}
                       placeholder="UAB Pavyzdys"
+                      disabled={loading}
                     />
                   </div>
                 </>
@@ -291,6 +318,7 @@ function LandingPage() {
                   value={authForm.email}
                   onChange={(e) => setAuthForm({...authForm, email: e.target.value})}
                   placeholder="jusu@email.lt"
+                  disabled={loading}
                 />
               </div>
 
@@ -301,6 +329,7 @@ function LandingPage() {
                   value={authForm.password}
                   onChange={(e) => setAuthForm({...authForm, password: e.target.value})}
                   placeholder="••••••••"
+                  disabled={loading}
                 />
               </div>
 
@@ -320,8 +349,12 @@ function LandingPage() {
                 </div>
               )}
 
-              <button onClick={handleAuth} className="btn-auth-submit">
-                {showAuthModal === 'login' ? 'Prisijungti' : 'Sukurti paskyrą'}
+              <button 
+                onClick={handleAuth} 
+                className="btn-auth-submit"
+                disabled={loading}
+              >
+                {loading ? 'Kraunama...' : (showAuthModal === 'login' ? 'Prisijungti' : 'Sukurti paskyrą')}
               </button>
             </div>
 
