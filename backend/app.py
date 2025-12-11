@@ -59,7 +59,7 @@ def init_db():
     );
     """)
 
-    # Create vehicles table
+    # Create vehicles table with user_id foreign key
     cur.execute("""
     CREATE TABLE IF NOT EXISTS vehicles (
         id SERIAL PRIMARY KEY,
@@ -311,9 +311,14 @@ def api_health():
 @app.route("/api/vehicles", methods=["GET"])
 @require_auth
 def api_get_vehicles(user_id):
+    """Get all vehicles for the authenticated user"""
     conn = get_db()
     cur = conn.cursor(cursor_factory=RealDictCursor)
-    cur.execute("SELECT * FROM vehicles WHERE user_id = %s ORDER BY created_at DESC", (user_id,))
+    # ✅ IMPORTANT: Filter by user_id to ensure users only see their own vehicles
+    cur.execute(
+        "SELECT * FROM vehicles WHERE user_id = %s ORDER BY created_at DESC",
+        (user_id,)
+    )
     rows = cur.fetchall()
     cur.close()
     conn.close()
@@ -323,6 +328,7 @@ def api_get_vehicles(user_id):
 @app.route("/api/vehicles", methods=["POST"])
 @require_auth
 def api_add_vehicle(user_id):
+    """Create a new vehicle for the authenticated user"""
     data = request.json
     print("Vehicle POST:", data)
 
@@ -333,38 +339,51 @@ def api_add_vehicle(user_id):
     conn = get_db()
     cur = conn.cursor(cursor_factory=RealDictCursor)
 
-    cur.execute("""
-        INSERT INTO vehicles 
-        (user_id, device_id, brand, model, custom_name, plate, imei, fmb_serial, status, total_km)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        RETURNING id
-    """, (
-        user_id,
-        device_id,
-        data.get("brand", ""),
-        data.get("model", ""),
-        data.get("custom_name", ""),
-        data.get("plate", ""),
-        data.get("imei", ""),
-        data.get("fmb_serial", ""),
-        data.get("status", "unknown"),
-        data.get("total_km", 0),
-    ))
+    try:
+        # ✅ IMPORTANT: Always set user_id to the authenticated user
+        cur.execute("""
+            INSERT INTO vehicles 
+            (user_id, device_id, brand, model, custom_name, plate, imei, fmb_serial, status, total_km)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
+        """, (
+            user_id,  # ✅ Set to authenticated user's ID
+            device_id,
+            data.get("brand", ""),
+            data.get("model", ""),
+            data.get("custom_name", ""),
+            data.get("plate", ""),
+            data.get("imei", ""),
+            data.get("fmb_serial", ""),
+            data.get("status", "unknown"),
+            data.get("total_km", 0),
+        ))
 
-    new_id = cur.fetchone()['id']
-    conn.commit()
-    cur.close()
-    conn.close()
+        new_id = cur.fetchone()['id']
+        conn.commit()
+        cur.close()
+        conn.close()
 
-    return jsonify({"ok": True, "id": new_id}), 201
+        return jsonify({"ok": True, "id": new_id}), 201
+    except Exception as e:
+        conn.rollback()
+        cur.close()
+        conn.close()
+        print(f"Error creating vehicle: {e}")
+        return jsonify({"error": "Failed to create vehicle"}), 500
 
 
 @app.route("/api/vehicles/<int:vehicle_id>", methods=["GET"])
 @require_auth
 def api_get_vehicle(user_id, vehicle_id):
+    """Get a specific vehicle (only if it belongs to the user)"""
     conn = get_db()
     cur = conn.cursor(cursor_factory=RealDictCursor)
-    cur.execute("SELECT * FROM vehicles WHERE id = %s AND user_id = %s", (vehicle_id, user_id))
+    # ✅ Check both vehicle_id AND user_id
+    cur.execute(
+        "SELECT * FROM vehicles WHERE id = %s AND user_id = %s",
+        (vehicle_id, user_id)
+    )
     row = cur.fetchone()
     cur.close()
     conn.close()
@@ -378,61 +397,86 @@ def api_get_vehicle(user_id, vehicle_id):
 @app.route("/api/vehicles/<int:vehicle_id>", methods=["PUT"])
 @require_auth
 def api_update_vehicle(user_id, vehicle_id):
+    """Update a vehicle (only if it belongs to the user)"""
     data = request.json
 
     conn = get_db()
     cur = conn.cursor()
 
-    # Check ownership
-    cur.execute("SELECT id FROM vehicles WHERE id = %s AND user_id = %s", (vehicle_id, user_id))
+    # ✅ Check ownership before updating
+    cur.execute(
+        "SELECT id FROM vehicles WHERE id = %s AND user_id = %s",
+        (vehicle_id, user_id)
+    )
     if not cur.fetchone():
         cur.close()
         conn.close()
         return jsonify({"error": "Vehicle not found"}), 404
 
-    cur.execute("""
-        UPDATE vehicles
-        SET brand = %s, model = %s, custom_name = %s, plate = %s, imei = %s, 
-            fmb_serial = %s, status = %s, total_km = %s
-        WHERE id = %s AND user_id = %s
-    """, (
-        data.get("brand"),
-        data.get("model"),
-        data.get("custom_name"),
-        data.get("plate"),
-        data.get("imei"),
-        data.get("fmb_serial"),
-        data.get("status", "offline"),
-        data.get("total_km", 0),
-        vehicle_id,
-        user_id
-    ))
+    try:
+        cur.execute("""
+            UPDATE vehicles
+            SET brand = %s, model = %s, custom_name = %s, plate = %s, imei = %s, 
+                fmb_serial = %s, status = %s, total_km = %s
+            WHERE id = %s AND user_id = %s
+        """, (
+            data.get("brand"),
+            data.get("model"),
+            data.get("custom_name"),
+            data.get("plate"),
+            data.get("imei"),
+            data.get("fmb_serial"),
+            data.get("status", "offline"),
+            data.get("total_km", 0),
+            vehicle_id,
+            user_id
+        ))
 
-    conn.commit()
-    cur.close()
-    conn.close()
+        conn.commit()
+        cur.close()
+        conn.close()
 
-    return jsonify({"ok": True})
+        return jsonify({"ok": True})
+    except Exception as e:
+        conn.rollback()
+        cur.close()
+        conn.close()
+        print(f"Error updating vehicle: {e}")
+        return jsonify({"error": "Failed to update vehicle"}), 500
 
 
 @app.route("/api/vehicles/<int:vehicle_id>", methods=["DELETE"])
 @require_auth
 def api_delete_vehicle(user_id, vehicle_id):
+    """Delete a vehicle (only if it belongs to the user)"""
     conn = get_db()
     cur = conn.cursor()
     
-    # Check ownership
-    cur.execute("SELECT id FROM vehicles WHERE id = %s AND user_id = %s", (vehicle_id, user_id))
+    # ✅ Check ownership before deleting
+    cur.execute(
+        "SELECT id FROM vehicles WHERE id = %s AND user_id = %s",
+        (vehicle_id, user_id)
+    )
     if not cur.fetchone():
         cur.close()
         conn.close()
         return jsonify({"error": "Vehicle not found"}), 404
     
-    cur.execute("DELETE FROM vehicles WHERE id = %s AND user_id = %s", (vehicle_id, user_id))
-    conn.commit()
-    cur.close()
-    conn.close()
-    return jsonify({"ok": True})
+    try:
+        cur.execute(
+            "DELETE FROM vehicles WHERE id = %s AND user_id = %s",
+            (vehicle_id, user_id)
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
+        return jsonify({"ok": True})
+    except Exception as e:
+        conn.rollback()
+        cur.close()
+        conn.close()
+        print(f"Error deleting vehicle: {e}")
+        return jsonify({"error": "Failed to delete vehicle"}), 500
 
 
 # =============== DOCUMENT UPLOADS ===============
@@ -440,10 +484,14 @@ def api_delete_vehicle(user_id, vehicle_id):
 @app.route("/api/vehicles/<int:vehicle_id>/documents", methods=["POST"])
 @require_auth
 def upload_document(user_id, vehicle_id):
-    # Check ownership
+    """Upload a document for a vehicle (only if vehicle belongs to user)"""
+    # ✅ Check ownership
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("SELECT id FROM vehicles WHERE id = %s AND user_id = %s", (vehicle_id, user_id))
+    cur.execute(
+        "SELECT id FROM vehicles WHERE id = %s AND user_id = %s",
+        (vehicle_id, user_id)
+    )
     if not cur.fetchone():
         cur.close()
         conn.close()
@@ -460,32 +508,43 @@ def upload_document(user_id, vehicle_id):
     if not allowed_file(file.filename):
         return jsonify({"error": "Leidžiami tik PDF, JPG, JPEG, PNG"}), 400
 
-    ext = file.filename.rsplit(".", 1)[1].lower()
-    filename = f"v{vehicle_id}_{int(time.time())}.{ext}"
-    filepath = os.path.join(UPLOAD_FOLDER, filename)
+    try:
+        ext = file.filename.rsplit(".", 1)[1].lower()
+        filename = f"v{vehicle_id}_{int(time.time())}.{ext}"
+        filepath = os.path.join(UPLOAD_FOLDER, filename)
 
-    file.save(filepath)
+        file.save(filepath)
 
-    cur.execute("""
-        INSERT INTO documents (vehicle_id, doc_type, title, file_path, valid_until)
-        VALUES (%s, %s, %s, %s, %s)
-    """, (vehicle_id, doc_type, title, filename, valid_until))
+        cur.execute("""
+            INSERT INTO documents (vehicle_id, doc_type, title, file_path, valid_until)
+            VALUES (%s, %s, %s, %s, %s)
+        """, (vehicle_id, doc_type, title, filename, valid_until))
 
-    conn.commit()
-    cur.close()
-    conn.close()
+        conn.commit()
+        cur.close()
+        conn.close()
 
-    return jsonify({"ok": True, "file": filename})
+        return jsonify({"ok": True, "file": filename})
+    except Exception as e:
+        conn.rollback()
+        cur.close()
+        conn.close()
+        print(f"Error uploading document: {e}")
+        return jsonify({"error": "Failed to upload document"}), 500
 
 
 @app.route("/api/vehicles/<int:vehicle_id>/documents", methods=["GET"])
 @require_auth
 def list_documents(user_id, vehicle_id):
+    """List documents for a vehicle (only if vehicle belongs to user)"""
     conn = get_db()
     cur = conn.cursor(cursor_factory=RealDictCursor)
     
-    # Check ownership
-    cur.execute("SELECT id FROM vehicles WHERE id = %s AND user_id = %s", (vehicle_id, user_id))
+    # ✅ Check ownership
+    cur.execute(
+        "SELECT id FROM vehicles WHERE id = %s AND user_id = %s",
+        (vehicle_id, user_id)
+    )
     if not cur.fetchone():
         cur.close()
         conn.close()
@@ -505,8 +564,11 @@ def list_documents(user_id, vehicle_id):
 @app.route("/api/documents/<int:doc_id>", methods=["DELETE"])
 @require_auth
 def delete_document(user_id, doc_id):
+    """Delete a document (only if it belongs to user's vehicle)"""
     conn = get_db()
     cur = conn.cursor(cursor_factory=RealDictCursor)
+    
+    # ✅ Check that document belongs to user's vehicle
     cur.execute("""
         SELECT d.id, d.file_path FROM documents d
         JOIN vehicles v ON d.vehicle_id = v.id
@@ -514,18 +576,30 @@ def delete_document(user_id, doc_id):
     """, (doc_id, user_id))
     row = cur.fetchone()
 
-    if row:
+    if not row:
+        cur.close()
+        conn.close()
+        return jsonify({"error": "Document not found"}), 404
+
+    try:
+        # Delete file from disk
         try:
             os.remove(os.path.join(UPLOAD_FOLDER, row["file_path"]))
         except:
             pass
 
-    cur.execute("DELETE FROM documents WHERE id = %s", (doc_id,))
-    conn.commit()
-    cur.close()
-    conn.close()
+        cur.execute("DELETE FROM documents WHERE id = %s", (doc_id,))
+        conn.commit()
+        cur.close()
+        conn.close()
 
-    return jsonify({"ok": True})
+        return jsonify({"ok": True})
+    except Exception as e:
+        conn.rollback()
+        cur.close()
+        conn.close()
+        print(f"Error deleting document: {e}")
+        return jsonify({"error": "Failed to delete document"}), 500
 
 
 # =============== FILE SERVE ===============
@@ -540,11 +614,15 @@ def serve_uploaded_file(filename):
 @app.route("/api/vehicles/<int:vehicle_id>/service", methods=["GET"])
 @require_auth
 def api_get_service_records(user_id, vehicle_id):
+    """Get service records for a vehicle (only if vehicle belongs to user)"""
     conn = get_db()
     cur = conn.cursor(cursor_factory=RealDictCursor)
     
-    # Check ownership
-    cur.execute("SELECT id FROM vehicles WHERE id = %s AND user_id = %s", (vehicle_id, user_id))
+    # ✅ Check ownership
+    cur.execute(
+        "SELECT id FROM vehicles WHERE id = %s AND user_id = %s",
+        (vehicle_id, user_id)
+    )
     if not cur.fetchone():
         cur.close()
         conn.close()
@@ -565,10 +643,14 @@ def api_get_service_records(user_id, vehicle_id):
 @app.route("/api/vehicles/<int:vehicle_id>/service", methods=["POST"])
 @require_auth
 def api_add_service_record(user_id, vehicle_id):
-    # Check ownership
+    """Add a service record for a vehicle (only if vehicle belongs to user)"""
+    # ✅ Check ownership
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("SELECT id FROM vehicles WHERE id = %s AND user_id = %s", (vehicle_id, user_id))
+    cur.execute(
+        "SELECT id FROM vehicles WHERE id = %s AND user_id = %s",
+        (vehicle_id, user_id)
+    )
     if not cur.fetchone():
         cur.close()
         conn.close()
@@ -604,26 +686,34 @@ def api_add_service_record(user_id, vehicle_id):
         d = datetime.strptime(performed_date, "%Y-%m-%d")
         next_date = (d + timedelta(days=TA_INTERVAL_DAYS)).strftime("%Y-%m-%d")
 
-    cur.execute("""
-        INSERT INTO service_records
-        (vehicle_id, service_type, performed_date, performed_km, next_km, next_date, location, notes)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-    """, (vehicle_id, service_type, performed_date, performed_km, next_km, next_date, location, notes))
+    try:
+        cur.execute("""
+            INSERT INTO service_records
+            (vehicle_id, service_type, performed_date, performed_km, next_km, next_date, location, notes)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        """, (vehicle_id, service_type, performed_date, performed_km, next_km, next_date, location, notes))
 
-    conn.commit()
-    cur.close()
-    conn.close()
+        conn.commit()
+        cur.close()
+        conn.close()
 
-    return jsonify({"ok": True}), 201
+        return jsonify({"ok": True}), 201
+    except Exception as e:
+        conn.rollback()
+        cur.close()
+        conn.close()
+        print(f"Error creating service record: {e}")
+        return jsonify({"error": "Failed to create service record"}), 500
 
 
 @app.route("/api/service/<int:record_id>", methods=["DELETE"])
 @require_auth
 def api_delete_service(user_id, record_id):
+    """Delete a service record (only if it belongs to user's vehicle)"""
     conn = get_db()
     cur = conn.cursor()
     
-    # Check ownership
+    # ✅ Check that service record belongs to user's vehicle
     cur.execute("""
         SELECT sr.id FROM service_records sr
         JOIN vehicles v ON sr.vehicle_id = v.id
@@ -635,11 +725,18 @@ def api_delete_service(user_id, record_id):
         conn.close()
         return jsonify({"error": "Service record not found"}), 404
     
-    cur.execute("DELETE FROM service_records WHERE id = %s", (record_id,))
-    conn.commit()
-    cur.close()
-    conn.close()
-    return jsonify({"ok": True})
+    try:
+        cur.execute("DELETE FROM service_records WHERE id = %s", (record_id,))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return jsonify({"ok": True})
+    except Exception as e:
+        conn.rollback()
+        cur.close()
+        conn.close()
+        print(f"Error deleting service record: {e}")
+        return jsonify({"error": "Failed to delete service record"}), 500
 
 
 # =============== DEBUG ===============
