@@ -1,9 +1,12 @@
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-
+import { useAuth } from "../context/AuthContext";
+import { useToast } from "../context/ToastContext";
 
 function DashboardLayout({ children }) {
   const navigate = useNavigate();
+  const { user, logout } = useAuth();
+  const { showToast } = useToast();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -21,6 +24,16 @@ function DashboardLayout({ children }) {
   const handleUserMenuClick = (action) => {
     console.log("User menu:", action);
     setUserMenuOpen(false);
+
+    if (action === "logout") {
+      logout();
+      showToast("Atsijungėte sėkmingai", "success");
+      navigate("/");
+    } else if (action === "profilis") {
+      // TODO: Navigate to profile page
+    } else if (action === "nustatymai") {
+      // TODO: Navigate to settings page
+    }
   };
 
   const handleSidebarItemClick = (target) => {
@@ -28,7 +41,7 @@ function DashboardLayout({ children }) {
     setSidebarOpen(false);
 
     if (target === "dashboard") {
-      navigate("/");
+      navigate("/dashboard");
     } else if (target === "vehicles") {
       navigate("/vehicles");
     } else if (target === "trips") {
@@ -37,7 +50,9 @@ function DashboardLayout({ children }) {
     } else if (target === "reports") {
     } else if (target === "settings") {
     } else if (target === "logout") {
-      // čia ateity bus logout logika
+      logout();
+      showToast("Atsijungėte sėkmingai", "success");
+      navigate("/");
     }
   };
 
@@ -75,6 +90,9 @@ function DashboardLayout({ children }) {
       document.removeEventListener("keydown", handleEsc);
     };
   }, [userMenuOpen, sidebarOpen]);
+
+  const userName = user?.name || "Vartotojas";
+  const userEmail = user?.email || "";
 
   return (
     <div className="page">
@@ -184,15 +202,18 @@ function DashboardLayout({ children }) {
               type="button"
               onClick={toggleUserMenu}
             >
-              <div className="user-avatar">J</div>
+              <div className="user-avatar">{userName.charAt(0).toUpperCase()}</div>
               <div className="user-text">
-                <div className="user-name">Justas Kazlauskas</div>
-                <div className="user-role">Administratorius</div>
+                <div className="user-name">{userName}</div>
+                <div className="user-role">Naudotojas</div>
               </div>
             </button>
 
             {userMenuOpen && (
               <div className="user-menu-dropdown">
+                <div style={{ padding: '8px', borderBottom: '1px solid rgba(255,255,255,0.1)', fontSize: '12px', color: 'var(--text-muted)' }}>
+                  {userEmail}
+                </div>
                 <button
                   type="button"
                   className="user-menu-item"
@@ -211,7 +232,7 @@ function DashboardLayout({ children }) {
                 <button
                   type="button"
                   className="user-menu-item user-menu-danger"
-                  onClick={() => handleUserMenuClick("atsijungti")}
+                  onClick={() => handleUserMenuClick("logout")}
                 >
                   Atsijungti
                 </button>
