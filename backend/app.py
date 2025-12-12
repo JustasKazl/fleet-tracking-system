@@ -865,7 +865,7 @@ def get_telemetry(imei):
         cur.execute("""
             SELECT * FROM telemetry 
             WHERE vehicle_id = %s 
-            ORDER BY timestamp DESC 
+            ORDER BY received_at DESC 
             LIMIT %s OFFSET %s
         """, (vehicle_id, limit, offset))
         
