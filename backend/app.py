@@ -375,6 +375,11 @@ def api_health():
             "message": str(e)
         }), 500
 
+# ======= TELEMETRY FROM FMB-003 =========
+
+@app.route("/api/telemetry/<device_id>", methods=["GET"])
+   def get_telemetry(device_id):
+       # Return GPS data for the device
 
 # =============== VEHICLES ===============
 
