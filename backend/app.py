@@ -32,19 +32,50 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 ALLOWED_EXTENSIONS = {"pdf", "jpg", "jpeg", "png"}
 
 app = Flask(__name__)
-CORS(app, 
-    resources={r"/api/*": {
-        "origins": [
-            "https://fleet-tracking-system-production-2cd5.up.railway.app",  # Your frontend URL
-            "http://localhost:3000",
-            "http://localhost:5173"
-        ],
-        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        "allow_headers": ["Content-Type", "Authorization"],
-        "expose_headers": ["Content-Type"],
-        "supports_credentials": True,
-        "max_age": 3600
-    }})
+
+# ═══════════════════════════════════════════════════════════════
+# PROPER CORS CONFIGURATION FOR RAILWAY
+# ═══════════════════════════════════════════════════════════════
+
+# Get frontend URL - adjust this to your actual frontend Railway URL
+FRONTEND_URLS = [
+    "https://fleet-tracking-system-production-2cd5.up.railway.app",  # Production frontend
+    "http://localhost:3000",    # Local development
+    "http://localhost:5173",    # Vite dev server
+    "http://127.0.0.1:5173",
+]
+
+CORS(app,
+    resources={
+        r"/api/*": {
+            "origins": FRONTEND_URLS,
+            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+            "allow_headers": ["Content-Type", "Authorization", "Accept"],
+            "expose_headers": ["Content-Type", "Authorization"],
+            "supports_credentials": True,
+            "max_age": 7200  # 2 hours
+        }
+    },
+    send_wildcard=False,
+    vary_header=True
+)
+
+# ═══════════════════════════════════════════════════════════════
+# HANDLE PREFLIGHT REQUESTS EXPLICITLY
+# ═══════════════════════════════════════════════════════════════
+
+@app.before_request
+def handle_preflight():
+    """Handle CORS preflight requests"""
+    if request.method == "OPTIONS":
+        response = jsonify({"status": "ok"})
+        response.headers.add("Access-Control-Allow-Origin", request.headers.get("Origin", "*"))
+        response.headers.add("Access-Control-Allow-Headers", "Content-Type,Authorization")
+        response.headers.add("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS")
+        response.headers.add("Access-Control-Max-Age", "7200")
+        return response, 200
+
+# ═════════════════════════════════════════════════════════════════
 
 # ----------------------------- DB -----------------------------
 
