@@ -1,6 +1,8 @@
 from flask import Flask, request, jsonify, send_from_directory
 import os
 import time
+import socket
+import threading
 from datetime import datetime, timedelta
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
@@ -15,6 +17,7 @@ DATABASE_URL = os.environ.get('DATABASE_URL')
 JWT_SECRET = os.environ.get('JWT_SECRET', 'your-secret-key-change-in-production')
 JWT_ALGORITHM = 'HS256'
 JWT_EXPIRATION_HOURS = 24
+TCP_PORT = int(os.environ.get('TCP_PORT', 5055))
 
 # Check if DATABASE_URL is set
 if not DATABASE_URL:
@@ -80,6 +83,25 @@ def init_db():
         );
         """)
         print("✅ vehicles table created/verified")
+
+        # Create telemetry table for GPS data from FMB003
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS telemetry (
+            id BIGSERIAL PRIMARY KEY,
+            vehicle_id INTEGER NOT NULL,
+            timestamp TIMESTAMP NOT NULL,
+            latitude DECIMAL(10, 8),
+            longitude DECIMAL(11, 8),
+            altitude INTEGER,
+            angle INTEGER,
+            satellites INTEGER,
+            speed INTEGER,
+            io_elements JSONB,
+            received_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(vehicle_id) REFERENCES vehicles(id) ON DELETE CASCADE
+        );
+        """)
+        print("✅ telemetry table created/verified")
 
         # Create documents table
         cur.execute("""
@@ -184,6 +206,270 @@ def run_migrations():
     finally:
         cur.close()
 
+# ─────── TELTONIKA CODEC 8 PARSER ───────
+
+def calculate_crc16(data):
+    """Calculate CRC16 checksum for Codec 8"""
+    crc = 0
+    for byte in data:
+        crc ^= byte << 8
+        for _ in range(8):
+            crc = crc << 1
+            if crc & 0x10000:
+                crc ^= 0x1021
+    return crc & 0xFFFF
+
+def parse_codec8_packet(buffer):
+    """Parse Teltonika Codec 8 packet"""
+    if len(buffer) < 12:
+        return None
+    
+    offset = 0
+    
+    # Check preamble (4 bytes of 0x00)
+    preamble = int.from_bytes(buffer[0:4], 'big')
+    if preamble != 0:
+        return None
+    offset += 4
+    
+    # Data length (4 bytes)
+    data_length = int.from_bytes(buffer[4:8], 'big')
+    if len(buffer) < 8 + data_length + 4:
+        return None
+    offset += 4
+    
+    # Codec ID (1 byte, should be 0x08 for Codec 8)
+    codec_id = buffer[offset]
+    if codec_id != 0x08:
+        return None
+    offset += 1
+    
+    # Number of records
+    num_records = buffer[offset]
+    offset += 1
+    
+    records = []
+    
+    for _ in range(num_records):
+        if offset + 26 > len(buffer):
+            break
+        
+        # Timestamp (8 bytes)
+        timestamp_ms = int.from_bytes(buffer[offset:offset+8], 'big')
+        offset += 8
+        
+        # Priority (1 byte)
+        priority = buffer[offset]
+        offset += 1
+        
+        # GPS element (15 bytes)
+        lon_raw = int.from_bytes(buffer[offset:offset+4], 'big', signed=True)
+        longitude = lon_raw / 10000000.0
+        offset += 4
+        
+        lat_raw = int.from_bytes(buffer[offset:offset+4], 'big', signed=True)
+        latitude = lat_raw / 10000000.0
+        offset += 4
+        
+        altitude = int.from_bytes(buffer[offset:offset+2], 'big', signed=True)
+        offset += 2
+        
+        angle = int.from_bytes(buffer[offset:offset+2], 'big')
+        offset += 2
+        
+        satellites = buffer[offset]
+        offset += 1
+        
+        speed = int.from_bytes(buffer[offset:offset+2], 'big')
+        offset += 2
+        
+        # IO Elements
+        event_id = buffer[offset]
+        offset += 1
+        
+        io_elements = {}
+        n_total = buffer[offset]
+        offset += 1
+        
+        # 1-byte elements
+        n1 = buffer[offset]
+        offset += 1
+        for _ in range(n1):
+            io_id = buffer[offset]
+            io_val = buffer[offset + 1]
+            io_elements[io_id] = io_val
+            offset += 2
+        
+        # 2-byte elements
+        n2 = buffer[offset]
+        offset += 1
+        for _ in range(n2):
+            io_id = buffer[offset]
+            io_val = int.from_bytes(buffer[offset+1:offset+3], 'big')
+            io_elements[io_id] = io_val
+            offset += 3
+        
+        # 4-byte elements
+        n4 = buffer[offset]
+        offset += 1
+        for _ in range(n4):
+            io_id = buffer[offset]
+            io_val = int.from_bytes(buffer[offset+1:offset+5], 'big')
+            io_elements[io_id] = io_val
+            offset += 5
+        
+        # 8-byte elements
+        n8 = buffer[offset]
+        offset += 1
+        for _ in range(n8):
+            io_id = buffer[offset]
+            io_val = int.from_bytes(buffer[offset+1:offset+9], 'big')
+            io_elements[io_id] = io_val
+            offset += 9
+        
+        records.append({
+            'timestamp': datetime.utcfromtimestamp(timestamp_ms / 1000.0),
+            'latitude': latitude,
+            'longitude': longitude,
+            'altitude': altitude,
+            'angle': angle,
+            'satellites': satellites,
+            'speed': speed,
+            'priority': priority,
+            'event_id': event_id,
+            'io_elements': io_elements
+        })
+    
+    return records
+
+def store_telemetry(imei, records):
+    """Store telemetry records in database"""
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        
+        # Find vehicle by IMEI
+        cur.execute("SELECT id FROM vehicles WHERE imei = %s OR fmb_serial = %s", (imei, imei))
+        result = cur.fetchone()
+        
+        if not result:
+            print(f"⚠️ Vehicle not found for IMEI: {imei}")
+            cur.close()
+            conn.close()
+            return False
+        
+        vehicle_id = result[0]
+        
+        # Insert telemetry records
+        for record in records:
+            cur.execute("""
+                INSERT INTO telemetry 
+                (vehicle_id, timestamp, latitude, longitude, altitude, angle, satellites, speed, io_elements)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (
+                vehicle_id,
+                record['timestamp'],
+                record['latitude'],
+                record['longitude'],
+                record['altitude'],
+                record['angle'],
+                record['satellites'],
+                record['speed'],
+                json.dumps(record['io_elements'])
+            ))
+        
+        # Update vehicle status
+        cur.execute(
+            "UPDATE vehicles SET status = %s WHERE id = %s",
+            ('online', vehicle_id)
+        )
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        print(f"✅ Stored {len(records)} telemetry records for vehicle {vehicle_id}")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Error storing telemetry: {e}")
+        return False
+
+# ─────── TELTONIKA TCP SERVER ───────
+
+def start_tcp_server():
+    """Start TCP server to receive Teltonika data"""
+    def handle_client(client_socket, addr):
+        print(f"🔌 Device connected: {addr}")
+        
+        imei = None
+        buffer = b''
+        
+        try:
+            while True:
+                data = client_socket.recv(1024)
+                if not data:
+                    break
+                
+                buffer += data
+                
+                # PHASE 1: IMEI Handshake
+                if imei is None:
+                    if len(buffer) >= 2:
+                        imei_len = int.from_bytes(buffer[0:2], 'big')
+                        if len(buffer) >= 2 + imei_len:
+                            imei = buffer[2:2+imei_len].decode('utf-8')
+                            buffer = buffer[2+imei_len:]
+                            print(f"📱 IMEI: {imei}")
+                            # Send ACK
+                            client_socket.send(b'\x01')
+                            continue
+                
+                # PHASE 2: Codec 8 packets
+                while len(buffer) > 0:
+                    records = parse_codec8_packet(buffer)
+                    if not records:
+                        break
+                    
+                    print(f"📦 Received {len(records)} records from {imei}")
+                    
+                    # Store in database
+                    store_telemetry(imei, records)
+                    
+                    # Send ACK (4 bytes, big-endian count)
+                    ack = len(records).to_bytes(4, 'big')
+                    client_socket.send(ack)
+                    
+                    # Remove processed data
+                    buffer = buffer[len(buffer):]  # Clear for next packet
+        
+        except Exception as e:
+            print(f"❌ Error handling client: {e}")
+        finally:
+            client_socket.close()
+            print(f"❌ Device disconnected: {addr}")
+    
+    def run_server():
+        server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        server.bind(('0.0.0.0', TCP_PORT))
+        server.listen(5)
+        print(f"🚀 TCP server listening on port {TCP_PORT}")
+        
+        try:
+            while True:
+                client_socket, addr = server.accept()
+                thread = threading.Thread(target=handle_client, args=(client_socket, addr))
+                thread.daemon = True
+                thread.start()
+        except Exception as e:
+            print(f"❌ Server error: {e}")
+        finally:
+            server.close()
+    
+    # Start in background thread
+    thread = threading.Thread(target=run_server)
+    thread.daemon = True
+    thread.start()
 
 # ---------------------- HELPERS & MIDDLEWARE -----------------------
 
@@ -242,7 +528,6 @@ def api_register():
     name = data.get("name")
     company = data.get("company", "")
     
-    # Validate
     if not email or not password or not name:
         return jsonify({"error": "Email, password, and name are required"}), 400
     
@@ -253,10 +538,8 @@ def api_register():
         conn = get_db()
         cur = conn.cursor()
         
-        # Hash password
         password_hash = generate_password_hash(password)
         
-        # Insert user
         cur.execute("""
             INSERT INTO users (email, password_hash, name, company)
             VALUES (%s, %s, %s, %s)
@@ -268,7 +551,6 @@ def api_register():
         cur.close()
         conn.close()
         
-        # Generate token
         token = generate_token(user[0], user[1])
         
         return jsonify({
@@ -314,7 +596,6 @@ def api_login():
         if not user or not check_password_hash(user['password_hash'], password):
             return jsonify({"error": "Invalid credentials"}), 401
         
-        # Generate token
         token = generate_token(user['id'], user['email'])
         
         return jsonify({
@@ -367,7 +648,8 @@ def api_health():
         return jsonify({
             "status": "ok", 
             "time": datetime.utcnow().isoformat() + "Z",
-            "database": "connected"
+            "database": "connected",
+            "tcp_server": "running"
         })
     except Exception as e:
         return jsonify({
@@ -377,9 +659,80 @@ def api_health():
 
 # ======= TELEMETRY FROM FMB-003 =========
 
-@app.route("/api/telemetry/<device_id>", methods=["GET"])
-   def get_telemetry(device_id):
-       # Return GPS data for the device
+@app.route("/api/telemetry/<imei>", methods=["GET"])
+def get_telemetry(imei):
+    """Get GPS data for a device"""
+    try:
+        limit = request.args.get('limit', default=100, type=int)
+        offset = request.args.get('offset', default=0, type=int)
+        
+        conn = get_db()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # Find vehicle by IMEI
+        cur.execute("SELECT id FROM vehicles WHERE imei = %s OR fmb_serial = %s", (imei, imei))
+        result = cur.fetchone()
+        
+        if not result:
+            cur.close()
+            conn.close()
+            return jsonify({"error": "Vehicle not found"}), 404
+        
+        vehicle_id = result['id']
+        
+        # Get telemetry data
+        cur.execute("""
+            SELECT * FROM telemetry 
+            WHERE vehicle_id = %s 
+            ORDER BY timestamp DESC 
+            LIMIT %s OFFSET %s
+        """, (vehicle_id, limit, offset))
+        
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        
+        return jsonify(rows), 200
+        
+    except Exception as e:
+        print(f"Get telemetry error: {e}")
+        return jsonify({"error": "Failed to get telemetry"}), 500
+
+@app.route("/api/track/<imei>", methods=["GET"])
+def get_track(imei):
+    """Get last 24 hours of track data for map visualization"""
+    try:
+        conn = get_db()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # Find vehicle by IMEI
+        cur.execute("SELECT id FROM vehicles WHERE imei = %s OR fmb_serial = %s", (imei, imei))
+        result = cur.fetchone()
+        
+        if not result:
+            cur.close()
+            conn.close()
+            return jsonify({"error": "Vehicle not found"}), 404
+        
+        vehicle_id = result['id']
+        
+        # Get last 24 hours
+        cur.execute("""
+            SELECT timestamp, latitude, longitude, speed, satellites 
+            FROM telemetry 
+            WHERE vehicle_id = %s AND timestamp > NOW() - INTERVAL '24 hours'
+            ORDER BY timestamp ASC
+        """, (vehicle_id,))
+        
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        
+        return jsonify(rows), 200
+        
+    except Exception as e:
+        print(f"Get track error: {e}")
+        return jsonify({"error": "Failed to get track"}), 500
 
 # =============== VEHICLES ===============
 
@@ -389,7 +742,6 @@ def api_get_vehicles(user_id):
     """Get all vehicles for the authenticated user"""
     conn = get_db()
     cur = conn.cursor(cursor_factory=RealDictCursor)
-    # ✅ IMPORTANT: Filter by user_id to ensure users only see their own vehicles
     cur.execute(
         "SELECT * FROM vehicles WHERE user_id = %s ORDER BY created_at DESC",
         (user_id,)
@@ -398,7 +750,6 @@ def api_get_vehicles(user_id):
     cur.close()
     conn.close()
     return jsonify(rows)
-
 
 @app.route("/api/vehicles", methods=["POST"])
 @require_auth
@@ -415,14 +766,13 @@ def api_add_vehicle(user_id):
     cur = conn.cursor(cursor_factory=RealDictCursor)
 
     try:
-        # ✅ IMPORTANT: Always set user_id to the authenticated user
         cur.execute("""
             INSERT INTO vehicles 
             (user_id, device_id, brand, model, custom_name, plate, imei, fmb_serial, status, total_km)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
         """, (
-            user_id,  # ✅ Set to authenticated user's ID
+            user_id,
             device_id,
             data.get("brand", ""),
             data.get("model", ""),
@@ -447,14 +797,12 @@ def api_add_vehicle(user_id):
         print(f"Error creating vehicle: {e}")
         return jsonify({"error": "Failed to create vehicle"}), 500
 
-
 @app.route("/api/vehicles/<int:vehicle_id>", methods=["GET"])
 @require_auth
 def api_get_vehicle(user_id, vehicle_id):
     """Get a specific vehicle (only if it belongs to the user)"""
     conn = get_db()
     cur = conn.cursor(cursor_factory=RealDictCursor)
-    # ✅ Check both vehicle_id AND user_id
     cur.execute(
         "SELECT * FROM vehicles WHERE id = %s AND user_id = %s",
         (vehicle_id, user_id)
@@ -468,7 +816,6 @@ def api_get_vehicle(user_id, vehicle_id):
 
     return jsonify(row)
 
-
 @app.route("/api/vehicles/<int:vehicle_id>", methods=["PUT"])
 @require_auth
 def api_update_vehicle(user_id, vehicle_id):
@@ -478,7 +825,6 @@ def api_update_vehicle(user_id, vehicle_id):
     conn = get_db()
     cur = conn.cursor()
 
-    # ✅ Check ownership before updating
     cur.execute(
         "SELECT id FROM vehicles WHERE id = %s AND user_id = %s",
         (vehicle_id, user_id)
@@ -519,7 +865,6 @@ def api_update_vehicle(user_id, vehicle_id):
         print(f"Error updating vehicle: {e}")
         return jsonify({"error": "Failed to update vehicle"}), 500
 
-
 @app.route("/api/vehicles/<int:vehicle_id>", methods=["DELETE"])
 @require_auth
 def api_delete_vehicle(user_id, vehicle_id):
@@ -527,7 +872,6 @@ def api_delete_vehicle(user_id, vehicle_id):
     conn = get_db()
     cur = conn.cursor()
     
-    # ✅ Check ownership before deleting
     cur.execute(
         "SELECT id FROM vehicles WHERE id = %s AND user_id = %s",
         (vehicle_id, user_id)
@@ -553,14 +897,12 @@ def api_delete_vehicle(user_id, vehicle_id):
         print(f"Error deleting vehicle: {e}")
         return jsonify({"error": "Failed to delete vehicle"}), 500
 
-
 # =============== DOCUMENT UPLOADS ===============
 
 @app.route("/api/vehicles/<int:vehicle_id>/documents", methods=["POST"])
 @require_auth
 def upload_document(user_id, vehicle_id):
     """Upload a document for a vehicle (only if vehicle belongs to user)"""
-    # ✅ Check ownership
     conn = get_db()
     cur = conn.cursor()
     cur.execute(
@@ -607,7 +949,6 @@ def upload_document(user_id, vehicle_id):
         print(f"Error uploading document: {e}")
         return jsonify({"error": "Failed to upload document"}), 500
 
-
 @app.route("/api/vehicles/<int:vehicle_id>/documents", methods=["GET"])
 @require_auth
 def list_documents(user_id, vehicle_id):
@@ -615,7 +956,6 @@ def list_documents(user_id, vehicle_id):
     conn = get_db()
     cur = conn.cursor(cursor_factory=RealDictCursor)
     
-    # ✅ Check ownership
     cur.execute(
         "SELECT id FROM vehicles WHERE id = %s AND user_id = %s",
         (vehicle_id, user_id)
@@ -635,7 +975,6 @@ def list_documents(user_id, vehicle_id):
     conn.close()
     return jsonify(rows)
 
-
 @app.route("/api/documents/<int:doc_id>", methods=["DELETE"])
 @require_auth
 def delete_document(user_id, doc_id):
@@ -643,7 +982,6 @@ def delete_document(user_id, doc_id):
     conn = get_db()
     cur = conn.cursor(cursor_factory=RealDictCursor)
     
-    # ✅ Check that document belongs to user's vehicle
     cur.execute("""
         SELECT d.id, d.file_path FROM documents d
         JOIN vehicles v ON d.vehicle_id = v.id
@@ -657,7 +995,6 @@ def delete_document(user_id, doc_id):
         return jsonify({"error": "Document not found"}), 404
 
     try:
-        # Delete file from disk
         try:
             os.remove(os.path.join(UPLOAD_FOLDER, row["file_path"]))
         except:
@@ -676,13 +1013,11 @@ def delete_document(user_id, doc_id):
         print(f"Error deleting document: {e}")
         return jsonify({"error": "Failed to delete document"}), 500
 
-
 # =============== FILE SERVE ===============
 
 @app.route("/uploads/<path:filename>")
 def serve_uploaded_file(filename):
     return send_from_directory(UPLOAD_FOLDER, filename, as_attachment=False)
-
 
 # =============== SERVICE RECORDS ===============
 
@@ -693,7 +1028,6 @@ def api_get_service_records(user_id, vehicle_id):
     conn = get_db()
     cur = conn.cursor(cursor_factory=RealDictCursor)
     
-    # ✅ Check ownership
     cur.execute(
         "SELECT id FROM vehicles WHERE id = %s AND user_id = %s",
         (vehicle_id, user_id)
@@ -714,12 +1048,10 @@ def api_get_service_records(user_id, vehicle_id):
 
     return jsonify(rows)
 
-
 @app.route("/api/vehicles/<int:vehicle_id>/service", methods=["POST"])
 @require_auth
 def api_add_service_record(user_id, vehicle_id):
     """Add a service record for a vehicle (only if vehicle belongs to user)"""
-    # ✅ Check ownership
     conn = get_db()
     cur = conn.cursor()
     cur.execute(
@@ -739,24 +1071,20 @@ def api_add_service_record(user_id, vehicle_id):
     location = data.get("location")
     notes = data.get("notes")
 
-    # AUTOMATINIAI INTERVALAI
     next_km = None
     next_date = None
 
     OIL_INTERVAL = 15000
     TIRES_INTERVAL = 30000
     GENERAL_CHECK = 10000
-    TA_INTERVAL_DAYS = 730  # 2 metai
+    TA_INTERVAL_DAYS = 730
 
     if service_type == "oil":
         next_km = performed_km + OIL_INTERVAL
-
     elif service_type == "tires":
         next_km = performed_km + TIRES_INTERVAL
-
     elif service_type == "general":
         next_km = performed_km + GENERAL_CHECK
-
     elif service_type == "ta":
         d = datetime.strptime(performed_date, "%Y-%m-%d")
         next_date = (d + timedelta(days=TA_INTERVAL_DAYS)).strftime("%Y-%m-%d")
@@ -780,7 +1108,6 @@ def api_add_service_record(user_id, vehicle_id):
         print(f"Error creating service record: {e}")
         return jsonify({"error": "Failed to create service record"}), 500
 
-
 @app.route("/api/service/<int:record_id>", methods=["DELETE"])
 @require_auth
 def api_delete_service(user_id, record_id):
@@ -788,7 +1115,6 @@ def api_delete_service(user_id, record_id):
     conn = get_db()
     cur = conn.cursor()
     
-    # ✅ Check that service record belongs to user's vehicle
     cur.execute("""
         SELECT sr.id FROM service_records sr
         JOIN vehicles v ON sr.vehicle_id = v.id
@@ -813,7 +1139,6 @@ def api_delete_service(user_id, record_id):
         print(f"Error deleting service record: {e}")
         return jsonify({"error": "Failed to delete service record"}), 500
 
-
 # =============== DEBUG ===============
 
 @app.route("/debug/columns")
@@ -831,11 +1156,9 @@ def debug_columns():
     conn.close()
     return jsonify([{"name": c[0], "type": c[1]} for c in cols])
 
-
 @app.route("/")
 def root():
-    return "Fleet backend running on PostgreSQL with Auth", 200
-
+    return "Fleet backend running on PostgreSQL with Auth + Teltonika TCP", 200
 
 # --------------------- MAIN ------------------------
 
@@ -849,7 +1172,9 @@ if __name__ == "__main__":
         init_db()
         print("\n2️⃣ Running migrations...")
         run_migrations()
-        print("\n✅ Database ready!")
+        print("\n3️⃣ Starting Teltonika TCP server...")
+        start_tcp_server()
+        print("\n✅ All systems ready!")
         print("=" * 60)
     except Exception as e:
         print(f"\n❌ STARTUP FAILED: {e}")
@@ -857,5 +1182,5 @@ if __name__ == "__main__":
         raise
     
     port = int(os.environ.get("PORT", 5000))
-    print(f"\n🎯 Starting server on port {port}...\n")
+    print(f"\n🎯 Starting Flask server on port {port}...\n")
     app.run(host="0.0.0.0", port=port, debug=False)
