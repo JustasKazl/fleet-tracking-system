@@ -95,16 +95,20 @@ function MapComponent({ vehicleId, vehicleImei, token, autoRefreshInterval = 100
       if (!map.current) {
         map.current = window.L.map(mapContainer.current).setView([lat, lng], 14);
 
-        // STYLED TILE LAYER - Dark theme with Cartodb Positron or Dark Matter
-        // Option 1: CartoDB Positron (light, minimal)
-        // window.L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
-        
-        // Option 2: CartoDB Dark Matter (dark, sleek) ⭐ RECOMMENDED
-        window.L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+        // STYLED TILE LAYER - Choose your theme!
+        // Option 1: CartoDB Positron (light, minimal) ⭐ CURRENTLY ENABLED
+        window.L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
           attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
           maxZoom: 19,
           className: "map-tile-layer",
         }).addTo(map.current);
+        
+        // Option 2: CartoDB Dark Matter (dark, sleek)
+        // window.L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+        //   attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+        //   maxZoom: 19,
+        //   className: "map-tile-layer",
+        // }).addTo(map.current);
 
         // Option 3: Stamen Toner (black & white, minimal)
         // window.L.tileLayer("https://tiles.stadiamaps.com/tiles/stamen_toner/{z}/{x}/{y}.png", {
