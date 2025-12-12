@@ -1215,7 +1215,7 @@ if __name__ == "__main__":
         init_db()
         print("\n2️⃣ Running migrations...")
         run_migrations()
-        print("\n3️⃣ Starting Teltonika TCP server...")
+        print("\n3️⃣ Starting Teltonika TCP server on port 5055...")
         start_tcp_server()
         print("\n✅ All systems ready!")
         print("=" * 60)
@@ -1224,6 +1224,9 @@ if __name__ == "__main__":
         print("=" * 60)
         raise
     
-    port = int(os.environ.get("PORT", 5000))
-    print(f"\n🎯 Starting Flask server on port {port}...\n")
-    app.run(host="0.0.0.0", port=port, debug=False)
+    # Flask runs on PORT env var (Railway sets this to 8080)
+    # TCP server runs separately on port 5055
+    flask_port = int(os.environ.get("PORT", 5000))
+    print(f"\n🎯 Starting Flask HTTP server on port {flask_port}...")
+    print(f"📡 Teltonika TCP server on port 5055 (separate)\n")
+    app.run(host="0.0.0.0", port=flask_port, debug=False)
