@@ -32,7 +32,19 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 ALLOWED_EXTENSIONS = {"pdf", "jpg", "jpeg", "png"}
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, 
+    resources={r"/api/*": {
+        "origins": [
+            "https://fleet-tracking-system-production-2cd5.up.railway.app",  # Your frontend URL
+            "http://localhost:3000",
+            "http://localhost:5173"
+        ],
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"],
+        "expose_headers": ["Content-Type"],
+        "supports_credentials": True,
+        "max_age": 3600
+    }})
 
 # ----------------------------- DB -----------------------------
 
