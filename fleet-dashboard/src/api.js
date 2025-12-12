@@ -1,6 +1,6 @@
-// src/config/api.js
-// Create this new file to centralize API configuration
-const API_BASE_URL = 'https://fleet-tracking-system-production.up.railway.app';
+// src/api.js
+// Centralized API configuration - supports environment variables
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://fleet-tracking-system-production.up.railway.app';
 
 export const API_ENDPOINTS = {
   vehicles: `${API_BASE_URL}/api/vehicles`,
@@ -20,7 +20,7 @@ export async function apiCall(url, options = {}) {
     });
 
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);  // ✅ Fixed
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
 
     return await response.json();
