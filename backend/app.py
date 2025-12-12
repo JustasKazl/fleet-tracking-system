@@ -250,53 +250,6 @@ def run_migrations():
     finally:
         cur.close()
 
-@app.route("/api/telemetry/webhook", methods=["POST"])
-def receive_fmb_webhook():
-    """Receive GPS data from FMB003 via HTTP POST"""
-    try:
-        data = request.json
-        print(f"📦 Received FMB data: {data}")
-        
-        # Extract IMEI and coordinates
-        imei = data.get("imei")
-        latitude = data.get("latitude")
-        longitude = data.get("longitude")
-        
-        if not imei:
-            return jsonify({"error": "No IMEI provided"}), 400
-        
-        # Store in database
-        conn = get_db()
-        cur = conn.cursor()
-        
-        # Find vehicle by IMEI
-        cur.execute("SELECT id FROM vehicles WHERE imei = %s OR fmb_serial = %s", (imei, imei))
-        result = cur.fetchone()
-        
-        if not result:
-            cur.close()
-            conn.close()
-            return jsonify({"error": "Vehicle not found"}), 404
-        
-        vehicle_id = result[0]
-        
-        # Store the location
-        cur.execute("""
-            INSERT INTO telemetry 
-            (vehicle_id, timestamp, latitude, longitude, speed)
-            VALUES (%s, NOW(), %s, %s, %s)
-        """, (vehicle_id, latitude, longitude, data.get("speed", 0)))
-        
-        conn.commit()
-        cur.close()
-        conn.close()
-        
-        return jsonify({"status": "ok", "vehicle_id": vehicle_id}), 200
-        
-    except Exception as e:
-        print(f"❌ Error receiving telemetry: {e}")
-        return jsonify({"error": str(e)}), 500
-
 # ─────── TELTONIKA CODEC 8 PARSER ───────
 
 def calculate_crc16(data):
@@ -770,6 +723,120 @@ def api_health():
             "status": "error",
             "message": str(e)
         }), 500
+
+# ======= TELEMETRY WEBHOOK (FMB-003 via HTTP POST) =========
+
+@app.route("/api/telemetry/webhook", methods=["POST"])
+def fmb_webhook():
+    """
+    Webhook for FMB003 to send GPS data via HTTP POST
+    
+    Expected JSON from FMB003:
+    {
+        "imei": "860123456789012",
+        "latitude": 54.6872,
+        "longitude": 25.2797,
+        "altitude": 45,
+        "angle": 180,
+        "satellites": 12,
+        "speed": 50,
+        "timestamp": "2025-12-12T10:30:45Z"
+    }
+    """
+    try:
+        data = request.json
+        print(f"📦 Received FMB data via webhook: {data}")
+        
+        # Extract IMEI
+        imei = data.get("imei")
+        if not imei:
+            print("❌ No IMEI in webhook data")
+            return jsonify({"error": "No IMEI provided"}), 400
+        
+        print(f"📱 IMEI: {imei}")
+        
+        # Get database connection
+        conn = get_db()
+        cur = conn.cursor()
+        
+        try:
+            # Find vehicle by IMEI
+            cur.execute("SELECT id FROM vehicles WHERE imei = %s OR fmb_serial = %s", (imei, imei))
+            result = cur.fetchone()
+            
+            if not result:
+                print(f"❌ Vehicle not found for IMEI: {imei}")
+                cur.close()
+                conn.close()
+                return jsonify({"error": f"Vehicle not found for IMEI: {imei}"}), 404
+            
+            vehicle_id = result[0]
+            print(f"✅ Found vehicle ID: {vehicle_id}")
+            
+            # Extract location data
+            latitude = data.get("latitude")
+            longitude = data.get("longitude")
+            altitude = data.get("altitude", 0)
+            angle = data.get("angle", 0)
+            satellites = data.get("satellites", 0)
+            speed = data.get("speed", 0)
+            timestamp = data.get("timestamp")
+            
+            if not timestamp:
+                timestamp = datetime.utcnow()
+            else:
+                try:
+                    timestamp = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                except:
+                    timestamp = datetime.utcnow()
+            
+            # Store in database
+            cur.execute("""
+                INSERT INTO telemetry 
+                (vehicle_id, timestamp, latitude, longitude, altitude, angle, satellites, speed, io_elements)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (
+                vehicle_id,
+                timestamp,
+                latitude,
+                longitude,
+                altitude,
+                angle,
+                satellites,
+                speed,
+                json.dumps(data.get("io_elements", {}))
+            ))
+            
+            # Update vehicle status to online
+            cur.execute(
+                "UPDATE vehicles SET status = %s WHERE id = %s",
+                ('online', vehicle_id)
+            )
+            
+            conn.commit()
+            cur.close()
+            conn.close()
+            
+            print(f"✅ Stored telemetry for vehicle {vehicle_id}")
+            print(f"📍 Location: {latitude}, {longitude}")
+            print(f"🚗 Speed: {speed} km/h")
+            
+            return jsonify({
+                "status": "ok",
+                "vehicle_id": vehicle_id,
+                "message": "Telemetry recorded"
+            }), 200
+            
+        except Exception as e:
+            print(f"❌ Error processing webhook: {e}")
+            conn.rollback()
+            cur.close()
+            conn.close()
+            return jsonify({"error": str(e)}), 500
+            
+    except Exception as e:
+        print(f"❌ Webhook error: {e}")
+        return jsonify({"error": str(e)}), 500
 
 # ======= TELEMETRY FROM FMB-003 =========
 
