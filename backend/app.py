@@ -70,6 +70,7 @@ def init_db():
             id SERIAL PRIMARY KEY,
             user_id INTEGER NOT NULL,
             device_id TEXT NOT NULL,
+            vin TEXT NOT NULL UNIQUE,
             brand TEXT,
             model TEXT,
             custom_name TEXT,
@@ -348,17 +349,40 @@ def store_telemetry(imei, records):
         conn = get_db()
         cur = conn.cursor()
         
-        # Find vehicle by IMEI
-        cur.execute("SELECT id FROM vehicles WHERE imei = %s OR fmb_serial = %s", (imei, imei))
-        result = cur.fetchone()
+        vehicle_id = None
+        vin = None
         
-        if not result:
-            print(f"⚠️ Vehicle not found for IMEI: {imei}")
+        # Try to extract VIN from first record's IO elements (IO ID 40005 = OBD VIN)
+        if records and records[0].get('io_elements'):
+            vin = records[0]['io_elements'].get(40005)
+            if vin:
+                # VIN might be bytes, convert to string
+                if isinstance(vin, bytes):
+                    vin = vin.decode('utf-8', errors='ignore')
+                print(f"📋 VIN detected from OBD: {vin}")
+                
+                # Find vehicle by VIN
+                cur.execute("SELECT id FROM vehicles WHERE vin = %s", (str(vin),))
+                result = cur.fetchone()
+                if result:
+                    vehicle_id = result[0]
+                    print(f"✅ Found vehicle by VIN: {vehicle_id}")
+        
+        # Fallback: Find vehicle by IMEI if VIN not found
+        if not vehicle_id:
+            print(f"⚠️ VIN not found in telemetry, falling back to IMEI lookup")
+            cur.execute("SELECT id FROM vehicles WHERE imei = %s OR fmb_serial = %s", (imei, imei))
+            result = cur.fetchone()
+            
+            if result:
+                vehicle_id = result[0]
+                print(f"✅ Found vehicle by IMEI: {vehicle_id}")
+        
+        if not vehicle_id:
+            print(f"❌ Vehicle not found for IMEI: {imei}, VIN: {vin}")
             cur.close()
             conn.close()
             return False
-        
-        vehicle_id = result[0]
         
         # Insert telemetry records
         for record in records:
@@ -759,8 +783,19 @@ def api_add_vehicle(user_id):
     print("Vehicle POST:", data)
 
     device_id = data.get("device_id")
+    vin = data.get("vin")
+    
+    # Validate required fields
     if not device_id:
         return jsonify({"error": "device_id is required"}), 400
+    
+    if not vin:
+        return jsonify({"error": "VIN is required"}), 400
+    
+    # Validate VIN format (typically 17 characters)
+    vin = vin.upper().strip()
+    if len(vin) != 17:
+        return jsonify({"error": "VIN must be 17 characters"}), 400
 
     conn = get_db()
     cur = conn.cursor(cursor_factory=RealDictCursor)
@@ -768,12 +803,13 @@ def api_add_vehicle(user_id):
     try:
         cur.execute("""
             INSERT INTO vehicles 
-            (user_id, device_id, brand, model, custom_name, plate, imei, fmb_serial, status, total_km)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            (user_id, device_id, vin, brand, model, custom_name, plate, imei, fmb_serial, status, total_km)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
         """, (
             user_id,
             device_id,
+            vin,
             data.get("brand", ""),
             data.get("model", ""),
             data.get("custom_name", ""),
@@ -790,6 +826,13 @@ def api_add_vehicle(user_id):
         conn.close()
 
         return jsonify({"ok": True, "id": new_id}), 201
+    except psycopg2.IntegrityError as e:
+        conn.rollback()
+        cur.close()
+        conn.close()
+        if "vin" in str(e).lower():
+            return jsonify({"error": "VIN already registered to another vehicle"}), 409
+        return jsonify({"error": "Failed to create vehicle"}), 409
     except Exception as e:
         conn.rollback()
         cur.close()
