@@ -250,6 +250,53 @@ def run_migrations():
     finally:
         cur.close()
 
+@app.route("/api/telemetry/webhook", methods=["POST"])
+def receive_fmb_webhook():
+    """Receive GPS data from FMB003 via HTTP POST"""
+    try:
+        data = request.json
+        print(f"📦 Received FMB data: {data}")
+        
+        # Extract IMEI and coordinates
+        imei = data.get("imei")
+        latitude = data.get("latitude")
+        longitude = data.get("longitude")
+        
+        if not imei:
+            return jsonify({"error": "No IMEI provided"}), 400
+        
+        # Store in database
+        conn = get_db()
+        cur = conn.cursor()
+        
+        # Find vehicle by IMEI
+        cur.execute("SELECT id FROM vehicles WHERE imei = %s OR fmb_serial = %s", (imei, imei))
+        result = cur.fetchone()
+        
+        if not result:
+            cur.close()
+            conn.close()
+            return jsonify({"error": "Vehicle not found"}), 404
+        
+        vehicle_id = result[0]
+        
+        # Store the location
+        cur.execute("""
+            INSERT INTO telemetry 
+            (vehicle_id, timestamp, latitude, longitude, speed)
+            VALUES (%s, NOW(), %s, %s, %s)
+        """, (vehicle_id, latitude, longitude, data.get("speed", 0)))
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        return jsonify({"status": "ok", "vehicle_id": vehicle_id}), 200
+        
+    except Exception as e:
+        print(f"❌ Error receiving telemetry: {e}")
+        return jsonify({"error": str(e)}), 500
+
 # ─────── TELTONIKA CODEC 8 PARSER ───────
 
 def calculate_crc16(data):
