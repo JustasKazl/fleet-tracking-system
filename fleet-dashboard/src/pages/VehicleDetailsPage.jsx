@@ -4,6 +4,7 @@ import DashboardLayout from "../layout/DashboardLayout";
 import AddDocumentForm from "../components/AddDocumentForm";
 import AddServiceModal from "../components/AddServiceModal";
 import ConfirmModal from "../components/ConfirmModal";
+import MapComponent from "../components/MapComponent";
 import { useToast } from "../context/ToastContext";
 import { useAuth } from "../context/AuthContext";
 import API_BASE_URL from "../api";
@@ -85,53 +86,63 @@ function VehicleDetailsPage() {
                     {vehicle.brand} {vehicle.model} ({vehicle.plate})
                 </h1>
 
-                {/* ---------------- PAGRINDINĖ INFO ---------------- */}
-                <div className="vehicle-details-section">
-                    <div className="vehicle-section-title">Pagrindinė informacija</div>
+                {/* TOPBAR: PAGRINDINĖ INFO + BŪSENA */}
+                <div className="vehicle-details-topbar">
+                    <div className="vehicle-details-section vehicle-info-section">
+                        <div className="vehicle-section-title">Pagrindinė informacija</div>
 
-                    <div className="vehicle-info-grid">
-                        <div className="vehicle-info-item">
-                            <div className="vehicle-info-label">Pavadinimas:</div>
-                            <div className="vehicle-info-value">{vehicle.custom_name}</div>
+                        <div className="vehicle-info-grid">
+                            <div className="vehicle-info-item">
+                                <div className="vehicle-info-label">Pavadinimas:</div>
+                                <div className="vehicle-info-value">{vehicle.custom_name}</div>
+                            </div>
+
+                            <div className="vehicle-info-item">
+                                <div className="vehicle-info-label">FMB130 serija:</div>
+                                <div className="vehicle-info-value">{vehicle.fmb_serial}</div>
+                            </div>
+
+                            <div className="vehicle-info-item">
+                                <div className="vehicle-info-label">IMEI:</div>
+                                <div className="vehicle-info-value">{vehicle.imei || "nenurodytas"}</div>
+                            </div>
+
+                            <div className="vehicle-info-item">
+                                <div className="vehicle-info-label">Sukurta:</div>
+                                <div className="vehicle-info-value">
+                                    {vehicle.created_at?.split("T")[0]}
+                                </div>
+                            </div>
                         </div>
+                    </div>
 
-                        <div className="vehicle-info-item">
-                            <div className="vehicle-info-label">FMB130 serija:</div>
-                            <div className="vehicle-info-value">{vehicle.fmb_serial}</div>
-                        </div>
+                    <div className="vehicle-details-section vehicle-status-section">
+                        <div className="vehicle-section-title">Būsena</div>
 
-                        <div className="vehicle-info-item">
-                            <div className="vehicle-info-label">IMEI:</div>
-                            <div className="vehicle-info-value">{vehicle.imei || "nenurodytas"}</div>
-                        </div>
+                        <div className="vehicle-status-grid">
+                            <div className="vehicle-info-item">
+                                <div className="vehicle-info-label">Statusas:</div>
+                                <span className={statusClass}>{vehicle.status}</span>
+                            </div>
 
-                        <div className="vehicle-info-item">
-                            <div className="vehicle-info-label">Sukurta:</div>
-                            <div className="vehicle-info-value">
-                                {vehicle.created_at?.split("T")[0]}
+                            <div className="vehicle-info-item">
+                                <div className="vehicle-info-label">Rida:</div>
+                                <div className="vehicle-info-value">{vehicle.total_km ?? "-"} km</div>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                {/* ---------------- BŪSENA ---------------- */}
+                {/* MAP SECTION */}
                 <div className="vehicle-details-section">
-                    <div className="vehicle-section-title">Būsena</div>
-
-                    <div className="vehicle-info-grid">
-                        <div className="vehicle-info-item">
-                            <div className="vehicle-info-label">Statusas:</div>
-                            <span className={statusClass}>{vehicle.status}</span>
-                        </div>
-
-                        <div className="vehicle-info-item">
-                            <div className="vehicle-info-label">Rida:</div>
-                            <div className="vehicle-info-value">{vehicle.total_km ?? "-"}</div>
-                        </div>
-                    </div>
+                    <MapComponent 
+                        vehicleId={id} 
+                        vehicleImei={vehicle.imei || vehicle.fmb_serial}
+                        token={token}
+                    />
                 </div>
 
-                {/* ---------------- DOKUMENTAI ---------------- */}
+                {/* DOKUMENTAI */}
                 <div className="vehicle-details-section">
                     <div className="vehicle-section-title">Dokumentai</div>
 
@@ -154,6 +165,7 @@ function VehicleDetailsPage() {
                                             <a
                                                 href={`${API_BASE_URL}/uploads/${doc.file_path}`}
                                                 target="_blank"
+                                                rel="noopener noreferrer"
                                                 className="btn-link"
                                             >
                                                 Peržiūrėti
@@ -181,7 +193,7 @@ function VehicleDetailsPage() {
                     </div>
                 </div>
 
-                {/* ---------------- SERVISO ISTORIJA ---------------- */}
+                {/* SERVISO ISTORIJA */}
                 <div className="vehicle-details-section">
                     <div className="vehicle-section-title">
                         Serviso istorija
@@ -237,12 +249,6 @@ function VehicleDetailsPage() {
                         onAdded={loadService}
                     />
                 )}
-
-                {/* ---------------- LOKACIJA ---------------- */}
-                <div className="vehicle-details-section">
-                    <div className="vehicle-section-title">Lokacija</div>
-                    <div className="vehicle-map-card">MAP BUS ČIA</div>
-                </div>
             </div>
 
             {/* -------- CONFIRM DELETE MODAL -------- */}
