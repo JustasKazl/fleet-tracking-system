@@ -316,17 +316,16 @@ def handle_client(client_socket, addr):
                 
                 if records:
                     print(f"✅ Parsed {len(records)} records from {imei}")
-                    
-                    if store_telemetry(imei, records):
-                        ack = len(records).to_bytes(4, 'big')
-                        client_socket.send(ack)
-                        print(f"📤 Sent ACK: {len(records)} records")
-                    else:
-                        client_socket.send(b'\x00\x00\x00\x00')
-                        print(f"❌ Sent rejection")
+                    store_telemetry(imei, records)
+                    # ALWAYS send ACK
+                    ack = len(records).to_bytes(4, 'big')
+                    client_socket.send(ack)
+                    print(f"📤 Sent ACK: {len(records)} records")
                 else:
-                    print(f"❌ Failed to parse packet")
-                    client_socket.send(b'\x00\x00\x00\x00')
+                    print(f"❌ Failed to parse packet - sending ACK anyway")
+                    # Even if parsing failed, send ACK to keep device happy
+                    client_socket.send(b'\x00\x00\x00\x01')  # ACK 1 record
+                    print(f"📤 Sent fallback ACK")
                 
                 buffer = buffer[total_packet_size:]
                 print(f"🔄 Buffer remaining: {len(buffer)} bytes")
