@@ -334,10 +334,13 @@ def handle_client(client_socket, addr):
                         client_socket.send(ack)
                         print(f"📤 Sent ACK: {len(records)} records")
                     else:
+                        # Send NACK (0 records accepted - unknown device)
                         client_socket.send(b'\x00\x00\x00\x00')
-                        print(f"❌ Sent rejection")
+                        print(f"📤 Sent NACK: 0 records (unknown device - no VIN match)")
                 else:
                     print(f"❌ Failed to parse packet")
+                    client_socket.send(b'\x00\x00\x00\x00')
+                    print(f"📤 Sent NACK: parse failed")
                     client_socket.send(b'\x00\x00\x00\x00')
                 
                 buffer = buffer[total_packet_size:]
