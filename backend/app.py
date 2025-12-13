@@ -463,6 +463,8 @@ def store_telemetry(imei, records):
 
 # ─────── TELTONIKA TCP SERVER ───────
 
+# FIXED TELTONIKA TCP SERVER - Replace in backend/app.py
+
 def start_tcp_server():
     """Start TCP server to receive Teltonika data"""
     def handle_client(client_socket, addr):
@@ -483,34 +485,80 @@ def start_tcp_server():
                 if imei is None:
                     if len(buffer) >= 2:
                         imei_len = int.from_bytes(buffer[0:2], 'big')
+                        print(f"📏 IMEI length: {imei_len}")
+                        
                         if len(buffer) >= 2 + imei_len:
                             imei = buffer[2:2+imei_len].decode('utf-8')
+                            print(f"📱 IMEI received: {imei}")
+                            
+                            # Remove IMEI from buffer
                             buffer = buffer[2+imei_len:]
-                            print(f"📱 IMEI: {imei}")
-                            # Send ACK
+                            
+                            # Send ACK (0x01 = accepted, 0x00 = rejected)
                             client_socket.send(b'\x01')
+                            print(f"✅ IMEI handshake complete")
                             continue
                 
                 # PHASE 2: Codec 8 packets
-                while len(buffer) > 0:
-                    records = parse_codec8_packet(buffer)
-                    if not records:
+                while len(buffer) >= 12:  # Minimum packet size
+                    # Check preamble (4 bytes of 0x00)
+                    preamble = int.from_bytes(buffer[0:4], 'big')
+                    if preamble != 0:
+                        print(f"❌ Invalid preamble: {hex(preamble)}")
+                        buffer = buffer[1:]  # Skip one byte and try again
+                        continue
+                    
+                    # Get data length
+                    data_length = int.from_bytes(buffer[4:8], 'big')
+                    total_packet_size = 8 + data_length + 4  # preamble + length + data + crc
+                    
+                    print(f"📦 Packet size: {total_packet_size} bytes (data: {data_length})")
+                    
+                    # Check if we have the complete packet
+                    if len(buffer) < total_packet_size:
+                        print(f"⏳ Waiting for more data... (have {len(buffer)}, need {total_packet_size})")
                         break
                     
-                    print(f"📦 Received {len(records)} records from {imei}")
+                    # Extract packet
+                    packet = buffer[:total_packet_size]
                     
-                    # Store in database
-                    store_telemetry(imei, records)
+                    # Validate CRC (optional but recommended)
+                    received_crc = int.from_bytes(packet[-4:], 'big')
+                    calculated_crc = calculate_crc16(packet[8:-4])
                     
-                    # Send ACK (4 bytes, big-endian count)
-                    ack = len(records).to_bytes(4, 'big')
-                    client_socket.send(ack)
+                    if received_crc != calculated_crc:
+                        print(f"⚠️ CRC mismatch! Received: {hex(received_crc)}, Calculated: {hex(calculated_crc)}")
+                        # Still process it (some devices have CRC issues)
                     
-                    # Remove processed data
-                    buffer = buffer[len(buffer):]  # Clear for next packet
+                    # Parse the packet
+                    records = parse_codec8_packet(packet)
+                    
+                    if records:
+                        print(f"✅ Parsed {len(records)} records from {imei}")
+                        
+                        # Store in database
+                        if store_telemetry(imei, records):
+                            # Send ACK (number of records accepted)
+                            ack = len(records).to_bytes(4, 'big')
+                            client_socket.send(ack)
+                            print(f"📤 Sent ACK: {len(records)} records")
+                        else:
+                            # Send rejection
+                            client_socket.send(b'\x00\x00\x00\x00')
+                            print(f"❌ Sent rejection (storage failed)")
+                    else:
+                        print(f"❌ Failed to parse packet")
+                        # Send rejection
+                        client_socket.send(b'\x00\x00\x00\x00')
+                    
+                    # Remove processed packet from buffer
+                    buffer = buffer[total_packet_size:]
+                    print(f"🔄 Buffer remaining: {len(buffer)} bytes")
         
         except Exception as e:
-            print(f"❌ Error handling client: {e}")
+            print(f"❌ Error handling client {addr}: {e}")
+            import traceback
+            traceback.print_exc()
         finally:
             client_socket.close()
             print(f"❌ Device disconnected: {addr}")
@@ -520,7 +568,7 @@ def start_tcp_server():
         server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         server.bind(('0.0.0.0', TCP_PORT))
         server.listen(5)
-        print(f"🚀 TCP server listening on port {TCP_PORT}")
+        print(f"🚀 TCP server listening on 0.0.0.0:{TCP_PORT}")
         
         try:
             while True:
