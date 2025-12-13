@@ -1428,7 +1428,8 @@ if __name__ == "__main__":
         print(f"\n❌ STARTUP FAILED: {e}")
         print("=" * 60)
         raise
-# Flask runs on PORT env var (Railway sets this to 8080)
+    
+    # Flask runs on PORT env var (Railway sets this dynamically)
     # TCP server runs separately on port 5055
     flask_port = int(os.environ.get("PORT", 8080))
     print(f"\n🎯 Starting Flask HTTP server on port {flask_port}...")
