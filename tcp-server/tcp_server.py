@@ -214,6 +214,16 @@ def store_telemetry(imei, records):
                 print(f"⚠️ No VIN found in IO elements. Available IDs: {list(io_elements.keys())}")
         
         if not vehicle_id:
+            # Temporary fallback: Try IMEI if VIN not available
+            print(f"⚠️ VIN not found, trying IMEI fallback...")
+            cur.execute("SELECT id FROM vehicles WHERE imei = %s OR fmb_serial = %s", (imei, imei))
+            result = cur.fetchone()
+            
+            if result:
+                vehicle_id = result[0]
+                print(f"✅ Found vehicle by IMEI fallback: {vehicle_id}")
+        
+        if not vehicle_id:
             log_unknown_device(imei, vin, records)
             print(f"❌ REJECTED: Vehicle not found for IMEI: {imei}, VIN: {vin}")
             cur.close()
@@ -331,15 +341,20 @@ def handle_client(client_socket, addr):
                     
                     if store_telemetry(imei, records):
                         ack = len(records).to_bytes(4, 'big')
-                        client_socket.send(ack)
+                        client_socket.sendall(ack)  # sendall ensures full transmission
                         print(f"📤 Sent ACK: {len(records)} records")
                     else:
                         # Send NACK (0 records accepted - unknown device)
-                        client_socket.send(b'\x00\x00\x00\x00')
+                        nack = b'\x00\x00\x00\x00'
+                        client_socket.sendall(nack)  # sendall ensures full transmission
                         print(f"📤 Sent NACK: 0 records (unknown device - no VIN match)")
+                        # Give device time to receive NACK before we process more data
+                        import time
+                        time.sleep(0.1)
                 else:
                     print(f"❌ Failed to parse packet")
-                    client_socket.send(b'\x00\x00\x00\x00')
+                    nack = b'\x00\x00\x00\x00'
+                    client_socket.sendall(nack)  # sendall ensures full transmission
                     print(f"📤 Sent NACK: parse failed")
                 
                 buffer = buffer[total_packet_size:]
