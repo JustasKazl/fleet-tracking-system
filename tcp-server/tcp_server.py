@@ -227,28 +227,18 @@ def store_telemetry(imei, records):
         return False
 
 def log_unknown_device(imei, vin, records):
-    """Log unknown device attempts to a file"""
+    """Log unknown device attempts"""
     try:
-        log_file = "/app/unknown_devices.log"
-        timestamp = datetime.utcnow().isoformat()
+        timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
         
+        # Print to Railway logs
+        print(f"⚠️  UNKNOWN CONNECTION FROM IMEI: {imei} (VIN: {vin if vin else 'NOT PROVIDED'})")
+        
+        # Write simple log to persistent volume
+        log_file = "/data/unknown_devices.log"
         with open(log_file, 'a') as f:
-            f.write(f"\n{'='*80}\n")
-            f.write(f"Timestamp: {timestamp}\n")
-            f.write(f"IMEI: {imei}\n")
-            f.write(f"VIN: {vin if vin else 'NOT PROVIDED'}\n")
-            f.write(f"Number of records: {len(records)}\n")
-            
-            if records:
-                first_record = records[0]
-                f.write(f"Location: {first_record.get('latitude')}, {first_record.get('longitude')}\n")
-                f.write(f"Speed: {first_record.get('speed')} km/h\n")
-                f.write(f"Satellites: {first_record.get('satellites')}\n")
-                f.write(f"IO Elements: {first_record.get('io_elements')}\n")
-            
-            f.write(f"{'='*80}\n")
+            f.write(f"{timestamp} - Unknown connection from IMEI {imei}\n")
         
-        print(f"📝 Logged unknown device to {log_file}")
     except Exception as e:
         print(f"⚠️ Failed to log unknown device: {e}")
 
