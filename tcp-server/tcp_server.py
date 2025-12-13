@@ -341,7 +341,6 @@ def handle_client(client_socket, addr):
                     print(f"❌ Failed to parse packet")
                     client_socket.send(b'\x00\x00\x00\x00')
                     print(f"📤 Sent NACK: parse failed")
-                    client_socket.send(b'\x00\x00\x00\x00')
                 
                 buffer = buffer[total_packet_size:]
                 print(f"🔄 Buffer remaining: {len(buffer)} bytes")
