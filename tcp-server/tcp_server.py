@@ -170,65 +170,22 @@ def store_telemetry(imei, records):
         conn = get_db()
         cur = conn.cursor()
         
-        vehicle_id = None
-        vin = None
+        # Find vehicle by IMEI (primary device identifier)
+        # Note: VIN is stored in database but not transmitted by FMB003
+        cur.execute("SELECT id, vin FROM vehicles WHERE imei = %s OR fmb_serial = %s", (imei, imei))
+        result = cur.fetchone()
         
-        # Debug: Print all IO elements to see what we're receiving
-        if records and records[0].get('io_elements'):
-            io_elements = records[0]['io_elements']
-            print(f"🔍 DEBUG: All IO Elements received: {list(io_elements.keys())}")
-            
-            # Try manual VIN first (40003)
-            vin = io_elements.get(40003)
-            if vin:
-                print(f"📋 VIN detected (Manual IO 40003): {vin}")
-            
-            # If no manual VIN, try OBD VIN (40005)
-            if not vin:
-                vin = io_elements.get(40005)
-                if vin:
-                    print(f"📋 VIN detected (OBD IO 40005): {vin}")
-            
-            # Also try AVL ID 410 (sometimes used for VIN)
-            if not vin:
-                vin = io_elements.get(410)
-                if vin:
-                    print(f"📋 VIN detected (AVL ID 410): {vin}")
-            
-            # Convert bytes to string if needed
-            if vin:
-                if isinstance(vin, bytes):
-                    vin = vin.decode('utf-8', errors='ignore')
-                elif isinstance(vin, int):
-                    vin = str(vin)
-                
-                vin = str(vin).strip()
-                print(f"🔍 Looking up VIN in database: {vin}")
-                
-                cur.execute("SELECT id FROM vehicles WHERE vin = %s", (vin,))
-                result = cur.fetchone()
-                if result:
-                    vehicle_id = result[0]
-                    print(f"✅ Found vehicle by VIN: {vehicle_id}")
-            else:
-                print(f"⚠️ No VIN found in IO elements. Available IDs: {list(io_elements.keys())}")
-        
-        if not vehicle_id:
-            # Temporary fallback: Try IMEI if VIN not available
-            print(f"⚠️ VIN not found, trying IMEI fallback...")
-            cur.execute("SELECT id FROM vehicles WHERE imei = %s OR fmb_serial = %s", (imei, imei))
-            result = cur.fetchone()
-            
-            if result:
-                vehicle_id = result[0]
-                print(f"✅ Found vehicle by IMEI fallback: {vehicle_id}")
-        
-        if not vehicle_id:
-            log_unknown_device(imei, vin, records)
-            print(f"❌ REJECTED: Vehicle not found for IMEI: {imei}, VIN: {vin}")
+        if not result:
+            # Unauthorized/unknown device
+            log_unknown_device(imei, None, records)
+            print(f"❌ REJECTED: Unauthorized device IMEI: {imei}")
             cur.close()
             conn.close()
             return False
+        
+        vehicle_id = result[0]
+        vin = result[1]
+        print(f"✅ Authorized device IMEI: {imei} → Vehicle ID: {vehicle_id}, VIN: {vin}")
         
         # Insert telemetry records
         for record in records:
@@ -253,7 +210,7 @@ def store_telemetry(imei, records):
         conn.commit()
         cur.close()
         conn.close()
-        print(f"✅ Stored {len(records)} telemetry records for vehicle {vehicle_id}")
+        print(f"✅ Stored {len(records)} telemetry records for vehicle {vehicle_id} (VIN: {vin})")
         return True
         
     except Exception as e:
