@@ -164,7 +164,7 @@ def parse_codec8_packet(buffer):
     return records
 
 def store_telemetry(imei, records):
-    """Store telemetry records in database"""
+    """Store telemetry records in database - Accept all connections, only store if VIN matches"""
     try:
         conn = get_db()
         cur = conn.cursor()
@@ -186,21 +186,33 @@ def store_telemetry(imei, records):
                     vehicle_id = result[0]
                     print(f"✅ Found vehicle by VIN: {vehicle_id}")
         
-        # REMOVED IMEI FALLBACK - Now we require VIN or reject
+        # Accept connection but don't store if no vehicle match
         if not vehicle_id:
-            # Log unknown device to file
-            log_unknown_device(imei, vin, records)
-            print(f"❌ REJECTED: Vehicle not found for IMEI: {imei}, VIN: {vin}")
+            print("=" * 60)
+            print(f"⚠️  DATA NOT STORED - No matching vehicle")
+            print(f"📱 IMEI: {imei}")
+            print(f"📋 VIN: {vin if vin else 'NOT PROVIDED'}")
+            print(f"📊 Records received: {len(records)}")
+            print("─" * 60)
+            for idx, record in enumerate(records, 1):
+                print(f"Record {idx}:")
+                print(f"  Timestamp: {record['timestamp']}")
+                print(f"  Location: {record['latitude']}, {record['longitude']}")
+                print(f"  Speed: {record['speed']} km/h")
+                print(f"  Satellites: {record['satellites']}")
+                print(f"  IO Elements: {record['io_elements']}")
+            print("=" * 60)
+            
             cur.close()
             conn.close()
-            return False
+            return True  # Accept the connection anyway
         
         # Insert telemetry records
         for record in records:
             cur.execute("""
                 INSERT INTO telemetry 
                 (vehicle_id, timestamp, latitude, longitude, altitude, angle, satellites, speed, io_elements)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             """, (
                 vehicle_id,
                 record['timestamp'],
@@ -224,7 +236,7 @@ def store_telemetry(imei, records):
         
     except Exception as e:
         print(f"❌ Error storing telemetry: {e}")
-        return False
+        return True  # Still accept the connection
 
 def log_unknown_device(imei, vin, records):
     """Log unknown device attempts"""
@@ -292,29 +304,33 @@ def handle_client(client_socket, addr):
                 
                 packet = buffer[:total_packet_size]
                 
-                # Validate CRC
-                received_crc = int.from_bytes(packet[-4:], 'big')
-                calculated_crc = calculate_crc16(packet[8:-4])
+                # Debug: Show packet hex
+                print(f"📦 Packet HEX (first 64 bytes): {packet[:64].hex()}")
                 
-                if received_crc != calculated_crc:
-                    print(f"⚠️ CRC mismatch!")
+                # Skip CRC validation - accept everything
+                print(f"⏭️ Skipping CRC validation")
                 
                 # Parse packet
                 records = parse_codec8_packet(packet)
                 
-                if records:
-                    print(f"✅ Parsed {len(records)} records from {imei}")
-                    
-                    if store_telemetry(imei, records):
+                # ALWAYS send ACK regardless of parsing result
+                try:
+                    if records and len(records) > 0:
+                        print(f"✅ Parsed {len(records)} records from {imei}")
+                        store_telemetry(imei, records)
                         ack = len(records).to_bytes(4, 'big')
-                        client_socket.send(ack)
-                        print(f"📤 Sent ACK: {len(records)} records")
                     else:
-                        client_socket.send(b'\x00\x00\x00\x00')
-                        print(f"❌ Sent rejection")
-                else:
-                    print(f"❌ Failed to parse packet")
-                    client_socket.send(b'\x00\x00\x00\x00')
+                        print(f"❌ Failed to parse packet - sending ACK anyway")
+                        ack = b'\x00\x00\x00\x01'  # ACK 1 record
+                    
+                    # Send ACK and ensure it's transmitted
+                    bytes_sent = client_socket.send(ack)
+                    print(f"📤 Sent ACK: {ack.hex()} ({bytes_sent} bytes transmitted)")
+                    
+                except Exception as ack_error:
+                    print(f"❌ Failed to send ACK: {ack_error}")
+                    import traceback
+                    traceback.print_exc()
                 
                 buffer = buffer[total_packet_size:]
                 print(f"🔄 Buffer remaining: {len(buffer)} bytes")
