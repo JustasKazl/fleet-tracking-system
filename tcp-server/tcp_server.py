@@ -186,18 +186,11 @@ def store_telemetry(imei, records):
                     vehicle_id = result[0]
                     print(f"✅ Found vehicle by VIN: {vehicle_id}")
         
-        # Fallback: Find vehicle by IMEI
+        # REMOVED IMEI FALLBACK - Now we require VIN or reject
         if not vehicle_id:
-            print(f"⚠️ VIN not found, using IMEI lookup")
-            cur.execute("SELECT id FROM vehicles WHERE imei = %s OR fmb_serial = %s", (imei, imei))
-            result = cur.fetchone()
-            
-            if result:
-                vehicle_id = result[0]
-                print(f"✅ Found vehicle by IMEI: {vehicle_id}")
-        
-        if not vehicle_id:
-            print(f"❌ Vehicle not found for IMEI: {imei}, VIN: {vin}")
+            # Log unknown device to file
+            log_unknown_device(imei, vin, records)
+            print(f"❌ REJECTED: Vehicle not found for IMEI: {imei}, VIN: {vin}")
             cur.close()
             conn.close()
             return False
@@ -232,6 +225,32 @@ def store_telemetry(imei, records):
     except Exception as e:
         print(f"❌ Error storing telemetry: {e}")
         return False
+
+def log_unknown_device(imei, vin, records):
+    """Log unknown device attempts to a file"""
+    try:
+        log_file = "/app/unknown_devices.log"
+        timestamp = datetime.utcnow().isoformat()
+        
+        with open(log_file, 'a') as f:
+            f.write(f"\n{'='*80}\n")
+            f.write(f"Timestamp: {timestamp}\n")
+            f.write(f"IMEI: {imei}\n")
+            f.write(f"VIN: {vin if vin else 'NOT PROVIDED'}\n")
+            f.write(f"Number of records: {len(records)}\n")
+            
+            if records:
+                first_record = records[0]
+                f.write(f"Location: {first_record.get('latitude')}, {first_record.get('longitude')}\n")
+                f.write(f"Speed: {first_record.get('speed')} km/h\n")
+                f.write(f"Satellites: {first_record.get('satellites')}\n")
+                f.write(f"IO Elements: {first_record.get('io_elements')}\n")
+            
+            f.write(f"{'='*80}\n")
+        
+        print(f"📝 Logged unknown device to {log_file}")
+    except Exception as e:
+        print(f"⚠️ Failed to log unknown device: {e}")
 
 # ─────── TCP SERVER ───────
 
