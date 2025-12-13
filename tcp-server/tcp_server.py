@@ -170,22 +170,55 @@ def store_telemetry(imei, records):
         conn = get_db()
         cur = conn.cursor()
         
-        # Find vehicle by IMEI (primary device identifier)
-        # Note: VIN is stored in database but not transmitted by FMB003
-        cur.execute("SELECT id, vin FROM vehicles WHERE imei = %s OR fmb_serial = %s", (imei, imei))
-        result = cur.fetchone()
+        vehicle_id = None
+        vin = None
         
-        if not result:
-            # Unauthorized/unknown device
-            log_unknown_device(imei, None, records)
-            print(f"❌ REJECTED: Unauthorized device IMEI: {imei}")
+        # Debug: Print all IO elements to see what we're receiving
+        if records and records[0].get('io_elements'):
+            io_elements = records[0]['io_elements']
+            print(f"🔍 DEBUG: All IO Elements received: {list(io_elements.keys())}")
+            
+            # Try manual VIN first (40003)
+            vin = io_elements.get(40003)
+            if vin:
+                print(f"📋 VIN detected (Manual IO 40003): {vin}")
+            
+            # If no manual VIN, try OBD VIN (40005)
+            if not vin:
+                vin = io_elements.get(40005)
+                if vin:
+                    print(f"📋 VIN detected (OBD IO 40005): {vin}")
+            
+            # Also try AVL ID 410 (sometimes used for VIN)
+            if not vin:
+                vin = io_elements.get(410)
+                if vin:
+                    print(f"📋 VIN detected (AVL ID 410): {vin}")
+            
+            # Convert bytes to string if needed
+            if vin:
+                if isinstance(vin, bytes):
+                    vin = vin.decode('utf-8', errors='ignore')
+                elif isinstance(vin, int):
+                    vin = str(vin)
+                
+                vin = str(vin).strip()
+                print(f"🔍 Looking up VIN in database: {vin}")
+                
+                cur.execute("SELECT id FROM vehicles WHERE vin = %s", (vin,))
+                result = cur.fetchone()
+                if result:
+                    vehicle_id = result[0]
+                    print(f"✅ Found vehicle by VIN: {vehicle_id}")
+            else:
+                print(f"⚠️ No VIN found in IO elements. Available IDs: {list(io_elements.keys())}")
+        
+        if not vehicle_id:
+            log_unknown_device(imei, vin, records)
+            print(f"❌ REJECTED: Vehicle not found for IMEI: {imei}, VIN: {vin}")
             cur.close()
             conn.close()
             return False
-        
-        vehicle_id = result[0]
-        vin = result[1]
-        print(f"✅ Authorized device IMEI: {imei} → Vehicle ID: {vehicle_id}, VIN: {vin}")
         
         # Insert telemetry records
         for record in records:
@@ -210,7 +243,7 @@ def store_telemetry(imei, records):
         conn.commit()
         cur.close()
         conn.close()
-        print(f"✅ Stored {len(records)} telemetry records for vehicle {vehicle_id} (VIN: {vin})")
+        print(f"✅ Stored {len(records)} telemetry records for vehicle {vehicle_id}")
         return True
         
     except Exception as e:
@@ -298,21 +331,17 @@ def handle_client(client_socket, addr):
                     
                     if store_telemetry(imei, records):
                         ack = len(records).to_bytes(4, 'big')
-                        client_socket.sendall(ack)  # sendall ensures full transmission
+                        client_socket.send(ack)
                         print(f"📤 Sent ACK: {len(records)} records")
                     else:
                         # Send NACK (0 records accepted - unknown device)
-                        nack = b'\x00\x00\x00\x00'
-                        client_socket.sendall(nack)  # sendall ensures full transmission
+                        client_socket.send(b'\x00\x00\x00\x00')
                         print(f"📤 Sent NACK: 0 records (unknown device - no VIN match)")
-                        # Give device time to receive NACK before we process more data
-                        import time
-                        time.sleep(0.1)
                 else:
                     print(f"❌ Failed to parse packet")
-                    nack = b'\x00\x00\x00\x00'
-                    client_socket.sendall(nack)  # sendall ensures full transmission
+                    client_socket.send(b'\x00\x00\x00\x00')
                     print(f"📤 Sent NACK: parse failed")
+                    client_socket.send(b'\x00\x00\x00\x00')
                 
                 buffer = buffer[total_packet_size:]
                 print(f"🔄 Buffer remaining: {len(buffer)} bytes")
