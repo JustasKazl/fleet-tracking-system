@@ -7,7 +7,6 @@ import os
 import socket
 import threading
 from datetime import datetime
-from http.server import HTTPServer, BaseHTTPRequestHandler
 import psycopg
 import json
 
@@ -170,25 +169,31 @@ def store_telemetry(imei, records):
         conn = get_db()
         cur = conn.cursor()
         
-        # Find vehicle by IMEI (primary device identifier)
-        # Note: VIN is stored in database but not transmitted by FMB003
-        print(f"🔍 Looking up vehicle with IMEI: {imei}")
-        cur.execute("SELECT id, vin FROM vehicles WHERE imei = %s OR fmb_serial = %s", (imei, imei))
-        result = cur.fetchone()
+        vehicle_id = None
+        vin = None
         
-        print(f"🔍 Database query result: {result}")
+        # Try to extract VIN from first record's IO elements
+        if records and records[0].get('io_elements'):
+            vin = records[0]['io_elements'].get(40005)
+            if vin:
+                if isinstance(vin, bytes):
+                    vin = vin.decode('utf-8', errors='ignore')
+                print(f"📋 VIN detected from OBD: {vin}")
+                
+                cur.execute("SELECT id FROM vehicles WHERE vin = %s", (str(vin),))
+                result = cur.fetchone()
+                if result:
+                    vehicle_id = result[0]
+                    print(f"✅ Found vehicle by VIN: {vehicle_id}")
         
-        if not result:
-            # Unauthorized/unknown device
-            log_unknown_device(imei, None, records)
-            print(f"❌ REJECTED: Unauthorized device IMEI: {imei}")
+        # REMOVED IMEI FALLBACK - Now we require VIN or reject
+        if not vehicle_id:
+            # Log unknown device to file
+            log_unknown_device(imei, vin, records)
+            print(f"❌ REJECTED: Vehicle not found for IMEI: {imei}, VIN: {vin}")
             cur.close()
             conn.close()
             return False
-        
-        vehicle_id = result[0]
-        vin = result[1]
-        print(f"✅ Authorized device IMEI: {imei} → Vehicle ID: {vehicle_id}, VIN: {vin}")
         
         # Insert telemetry records
         for record in records:
@@ -208,12 +213,13 @@ def store_telemetry(imei, records):
                 json.dumps(record['io_elements'])
             ))
         
+        # Update vehicle status
         cur.execute("UPDATE vehicles SET status = %s WHERE id = %s", ('online', vehicle_id))
         
         conn.commit()
         cur.close()
         conn.close()
-        print(f"✅ Stored {len(records)} telemetry records for vehicle {vehicle_id} (VIN: {vin})")
+        print(f"✅ Stored {len(records)} telemetry records for vehicle {vehicle_id}")
         return True
         
     except Exception as e:
@@ -301,21 +307,14 @@ def handle_client(client_socket, addr):
                     
                     if store_telemetry(imei, records):
                         ack = len(records).to_bytes(4, 'big')
-                        client_socket.sendall(ack)  # sendall ensures full transmission
+                        client_socket.send(ack)
                         print(f"📤 Sent ACK: {len(records)} records")
                     else:
-                        # Send NACK (0 records accepted - unknown device)
-                        nack = b'\x00\x00\x00\x00'
-                        client_socket.sendall(nack)  # sendall ensures full transmission
-                        print(f"📤 Sent NACK: 0 records (unknown device - no VIN match)")
-                        # Give device time to receive NACK before we process more data
-                        import time
-                        time.sleep(0.1)
+                        client_socket.send(b'\x00\x00\x00\x00')
+                        print(f"❌ Sent rejection")
                 else:
                     print(f"❌ Failed to parse packet")
-                    nack = b'\x00\x00\x00\x00'
-                    client_socket.sendall(nack)  # sendall ensures full transmission
-                    print(f"📤 Sent NACK: parse failed")
+                    client_socket.send(b'\x00\x00\x00\x00')
                 
                 buffer = buffer[total_packet_size:]
                 print(f"🔄 Buffer remaining: {len(buffer)} bytes")
@@ -348,65 +347,6 @@ def run_server():
     finally:
         server.close()
 
-# ─────── HTTP LOG VIEWER ───────
-
-class LogViewerHandler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        if self.path == '/logs':
-            try:
-                # Read the log file
-                with open('/data/unknown_devices.log', 'r') as f:
-                    content = f.read()
-                
-                # Return as plain text
-                self.send_response(200)
-                self.send_header('Content-type', 'text/plain; charset=utf-8')
-                self.end_headers()
-                
-                if content:
-                    self.wfile.write(content.encode())
-                else:
-                    self.wfile.write(b'No unknown devices logged yet.')
-                    
-            except FileNotFoundError:
-                self.send_response(200)
-                self.send_header('Content-type', 'text/plain')
-                self.end_headers()
-                self.wfile.write(b'No unknown devices logged yet.')
-                
-        elif self.path == '/':
-            # Show info page
-            self.send_response(200)
-            self.send_header('Content-type', 'text/html')
-            self.end_headers()
-            html = """
-            <html>
-            <head><title>TCP Server Logs</title></head>
-            <body style="font-family: monospace; padding: 20px;">
-                <h1>🚀 Teltonika TCP Server</h1>
-                <p><a href="/logs">View Unknown Devices Log</a></p>
-            </body>
-            </html>
-            """
-            self.wfile.write(html.encode())
-        else:
-            self.send_response(404)
-            self.end_headers()
-    
-    def log_message(self, format, *args):
-        # Suppress HTTP request logs
-        pass
-
-def start_log_viewer():
-    """Start HTTP server for viewing logs"""
-    def run():
-        server = HTTPServer(('0.0.0.0', 8080), LogViewerHandler)
-        server.serve_forever()
-    
-    thread = threading.Thread(target=run, daemon=True)
-    thread.start()
-    print("📊 Log viewer available at http://<your-domain>:8080/logs")
-
 # ─────── MAIN ───────
 
 if __name__ == "__main__":
@@ -417,8 +357,4 @@ if __name__ == "__main__":
     print(f"🗄️ Database: Connected")
     print("=" * 60)
     
-    # Start HTTP log viewer
-    start_log_viewer()
-    
-    # Start TCP server (blocks forever)
     run_server()
