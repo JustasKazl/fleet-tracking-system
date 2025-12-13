@@ -174,7 +174,7 @@ def store_telemetry(imei, records):
         
         # Try to extract VIN from first record's IO elements
         if records and records[0].get('io_elements'):
-            vin = records[0]['io_elements'].get(40005)
+            vin = records[0]['io_elements'].get(40410)
             if vin:
                 if isinstance(vin, bytes):
                     vin = vin.decode('utf-8', errors='ignore')
