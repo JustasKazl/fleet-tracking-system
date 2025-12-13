@@ -304,9 +304,14 @@ def handle_client(client_socket, addr):
                 
                 packet = buffer[:total_packet_size]
                 
+                # Debug: Show packet hex
+                print(f"📦 Packet HEX (first 64 bytes): {packet[:64].hex()}")
+                
                 # Validate CRC
                 received_crc = int.from_bytes(packet[-4:], 'big')
                 calculated_crc = calculate_crc16(packet[8:-4])
+                
+                print(f"🔍 CRC - Received: {hex(received_crc)}, Calculated: {hex(calculated_crc)}")
                 
                 if received_crc != calculated_crc:
                     print(f"⚠️ CRC mismatch!")
@@ -314,18 +319,24 @@ def handle_client(client_socket, addr):
                 # Parse packet
                 records = parse_codec8_packet(packet)
                 
-                if records:
-                    print(f"✅ Parsed {len(records)} records from {imei}")
-                    store_telemetry(imei, records)
-                    # ALWAYS send ACK
-                    ack = len(records).to_bytes(4, 'big')
-                    client_socket.send(ack)
-                    print(f"📤 Sent ACK: {len(records)} records")
-                else:
-                    print(f"❌ Failed to parse packet - sending ACK anyway")
-                    # Even if parsing failed, send ACK to keep device happy
-                    client_socket.send(b'\x00\x00\x00\x01')  # ACK 1 record
-                    print(f"📤 Sent fallback ACK")
+                # ALWAYS send ACK regardless of parsing result
+                try:
+                    if records and len(records) > 0:
+                        print(f"✅ Parsed {len(records)} records from {imei}")
+                        store_telemetry(imei, records)
+                        ack = len(records).to_bytes(4, 'big')
+                    else:
+                        print(f"❌ Failed to parse packet - sending ACK anyway")
+                        ack = b'\x00\x00\x00\x01'  # ACK 1 record
+                    
+                    # Send ACK and ensure it's transmitted
+                    bytes_sent = client_socket.send(ack)
+                    print(f"📤 Sent ACK: {ack.hex()} ({bytes_sent} bytes transmitted)")
+                    
+                except Exception as ack_error:
+                    print(f"❌ Failed to send ACK: {ack_error}")
+                    import traceback
+                    traceback.print_exc()
                 
                 buffer = buffer[total_packet_size:]
                 print(f"🔄 Buffer remaining: {len(buffer)} bytes")
