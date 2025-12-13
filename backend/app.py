@@ -122,9 +122,6 @@ def init_db():
             fmb_serial TEXT,
             status TEXT DEFAULT 'unknown',
             total_km INTEGER DEFAULT 0,
-            last_latitude DECIMAL(10, 8),
-            last_longitude DECIMAL(11, 8),
-            last_seen TIMESTAMP,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
         );
@@ -244,31 +241,7 @@ def run_migrations():
             print("✅ Migration completed successfully!")
         else:
             print("✅ user_id column already exists in vehicles table")
-        
-        # Check and add last_latitude, last_longitude, last_seen columns
-        print("🔍 Checking if vehicles table has location tracking columns...")
-        
-        cur.execute("""
-        SELECT column_name 
-        FROM information_schema.columns 
-        WHERE table_name = 'vehicles' AND column_name IN ('last_latitude', 'last_longitude', 'last_seen')
-        """)
-        
-        existing_cols = [row[0] for row in cur.fetchall()]
-        
-        if 'last_latitude' not in existing_cols:
-            cur.execute("ALTER TABLE vehicles ADD COLUMN last_latitude DECIMAL(10, 8);")
-            print("✅ Added last_latitude column")
-        
-        if 'last_longitude' not in existing_cols:
-            cur.execute("ALTER TABLE vehicles ADD COLUMN last_longitude DECIMAL(11, 8);")
-            print("✅ Added last_longitude column")
-        
-        if 'last_seen' not in existing_cols:
-            cur.execute("ALTER TABLE vehicles ADD COLUMN last_seen TIMESTAMP;")
-            print("✅ Added last_seen column")
-        
-        conn.commit()
+            conn.commit()
 
     except Exception as e:
         print(f"❌ Migration error: {e}")
@@ -277,7 +250,7 @@ def run_migrations():
     finally:
         cur.close()
 
-# ─────── TELTONIKA CODEC 8 PARSER (WITH VIN EXTRACTION) ───────
+# ─────── TELTONIKA CODEC 8 PARSER ───────
 
 def calculate_crc16(data):
     """Calculate CRC16 checksum for Codec 8"""
@@ -290,296 +263,207 @@ def calculate_crc16(data):
                 crc ^= 0x1021
     return crc & 0xFFFF
 
-def parse_codec8_packet(packet):
-    """Parse Codec 8 packet and extract VIN from OBD (AVL ID 40410)"""
-    try:
-        if len(packet) < 12:
-            return None
-        
-        offset = 8  # Skip preamble (4) and data length (4)
-        
-        # Codec ID
-        codec_id = packet[offset]
-        offset += 1
-        
-        if codec_id != 0x08:
-            print(f"❌ Unsupported codec: {hex(codec_id)}")
-            return None
-        
-        # Number of records
-        num_records = packet[offset]
-        offset += 1
-        
-        records = []
-        
-        for _ in range(num_records):
-            if offset + 8 > len(packet):
-                break
-            
-            # Timestamp (8 bytes)
-            timestamp_ms = int.from_bytes(packet[offset:offset+8], 'big')
-            timestamp = datetime.utcfromtimestamp(timestamp_ms / 1000.0)
-            offset += 8
-            
-            # Priority (1 byte)
-            if offset + 1 > len(packet):
-                break
-            priority = packet[offset]
-            offset += 1
-            
-            # GPS Element (15 bytes)
-            if offset + 15 > len(packet):
-                break
-            
-            lon_raw = int.from_bytes(packet[offset:offset+4], 'big', signed=True)
-            latitude_raw = int.from_bytes(packet[offset+4:offset+8], 'big', signed=True)
-            altitude = int.from_bytes(packet[offset+8:offset+10], 'big')
-            angle = int.from_bytes(packet[offset+10:offset+12], 'big')
-            satellites = packet[offset+12]
-            speed = int.from_bytes(packet[offset+13:offset+15], 'big')
-            
-            longitude = lon_raw / 10000000.0
-            latitude = latitude_raw / 10000000.0
-            
-            offset += 15
-            
-            # IO Elements
-            if offset + 2 > len(packet):
-                break
-            
-            event_id = packet[offset]
-            offset += 1
-            
-            io_total = packet[offset]
-            offset += 1
-            
-            io_elements = {}
-            vin = None
-            
-            # Parse 1-byte IO elements
-            if offset + 1 <= len(packet):
-                n1 = packet[offset]
-                offset += 1
-                
-                for _ in range(n1):
-                    if offset + 2 <= len(packet):
-                        io_id = packet[offset]
-                        io_value = packet[offset + 1]
-                        io_elements[io_id] = io_value
-                        offset += 2
-            
-            # Parse 2-byte IO elements
-            if offset + 1 <= len(packet):
-                n2 = packet[offset]
-                offset += 1
-                
-                for _ in range(n2):
-                    if offset + 3 <= len(packet):
-                        io_id = packet[offset]
-                        io_value = int.from_bytes(packet[offset+1:offset+3], 'big')
-                        io_elements[io_id] = io_value
-                        offset += 3
-            
-            # Parse 4-byte IO elements
-            if offset + 1 <= len(packet):
-                n4 = packet[offset]
-                offset += 1
-                
-                for _ in range(n4):
-                    if offset + 5 <= len(packet):
-                        io_id = packet[offset]
-                        io_value = int.from_bytes(packet[offset+1:offset+5], 'big')
-                        io_elements[io_id] = io_value
-                        offset += 5
-            
-            # Parse 8-byte IO elements
-            if offset + 1 <= len(packet):
-                n8 = packet[offset]
-                offset += 1
-                
-                for _ in range(n8):
-                    if offset + 9 <= len(packet):
-                        io_id = packet[offset]
-                        io_value = int.from_bytes(packet[offset+1:offset+9], 'big')
-                        io_elements[io_id] = io_value
-                        offset += 9
-            
-            # Parse Variable Length (ASCII) IO elements - VIN IS HERE!
-            if offset + 1 <= len(packet):
-                nX = packet[offset]
-                offset += 1
-                
-                print(f"📦 Variable length IO elements: {nX}")
-                
-                for i in range(nX):
-                    if offset + 3 <= len(packet):
-                        io_id = packet[offset]
-                        io_length = int.from_bytes(packet[offset+1:offset+3], 'big')
-                        offset += 3
-                        
-                        print(f"   IO {io_id}: length={io_length}")
-                        
-                        if offset + io_length <= len(packet):
-                            io_value_bytes = packet[offset:offset+io_length]
-                            io_value_str = io_value_bytes.decode('utf-8', errors='ignore')
-                            io_elements[io_id] = io_value_str
-                            offset += io_length
-                            
-                            print(f"   IO {io_id}: '{io_value_str}'")
-                            
-                            # Check if this is the VIN field (AVL ID 40410 - OBD VIN)
-                            if io_id == 40410:
-                                vin = io_value_str.strip()
-                                print(f"🔍 ✅ FOUND VIN FROM OBD: {vin}")
-            
-            # If no VIN found, log all IO elements
-            if not vin:
-                print(f"⚠️ No VIN found in IO element 40410")
-                print(f"   Available IO IDs: {list(io_elements.keys())}")
-            
-            record = {
-                'timestamp': timestamp,
-                'latitude': latitude,
-                'longitude': longitude,
-                'altitude': altitude,
-                'angle': angle,
-                'satellites': satellites,
-                'speed': speed,
-                'priority': priority,
-                'event_id': event_id,
-                'io_elements': io_elements,
-                'vin': vin  # VIN extracted from OBD!
-            }
-            
-            records.append(record)
-        
-        return records
-        
-    except Exception as e:
-        print(f"❌ Error parsing Codec 8 packet: {e}")
-        import traceback
-        traceback.print_exc()
+def parse_codec8_packet(buffer):
+    """Parse Teltonika Codec 8 packet"""
+    if len(buffer) < 12:
         return None
+    
+    offset = 0
+    
+    # Check preamble (4 bytes of 0x00)
+    preamble = int.from_bytes(buffer[0:4], 'big')
+    if preamble != 0:
+        return None
+    offset += 4
+    
+    # Data length (4 bytes)
+    data_length = int.from_bytes(buffer[4:8], 'big')
+    if len(buffer) < 8 + data_length + 4:
+        return None
+    offset += 4
+    
+    # Codec ID (1 byte, should be 0x08 for Codec 8)
+    codec_id = buffer[offset]
+    if codec_id != 0x08:
+        return None
+    offset += 1
+    
+    # Number of records
+    num_records = buffer[offset]
+    offset += 1
+    
+    records = []
+    
+    for _ in range(num_records):
+        if offset + 26 > len(buffer):
+            break
+        
+        # Timestamp (8 bytes)
+        timestamp_ms = int.from_bytes(buffer[offset:offset+8], 'big')
+        offset += 8
+        
+        # Priority (1 byte)
+        priority = buffer[offset]
+        offset += 1
+        
+        # GPS element (15 bytes)
+        lon_raw = int.from_bytes(buffer[offset:offset+4], 'big', signed=True)
+        longitude = lon_raw / 10000000.0
+        offset += 4
+        
+        lat_raw = int.from_bytes(buffer[offset:offset+4], 'big', signed=True)
+        latitude = lat_raw / 10000000.0
+        offset += 4
+        
+        altitude = int.from_bytes(buffer[offset:offset+2], 'big', signed=True)
+        offset += 2
+        
+        angle = int.from_bytes(buffer[offset:offset+2], 'big')
+        offset += 2
+        
+        satellites = buffer[offset]
+        offset += 1
+        
+        speed = int.from_bytes(buffer[offset:offset+2], 'big')
+        offset += 2
+        
+        # IO Elements
+        event_id = buffer[offset]
+        offset += 1
+        
+        io_elements = {}
+        n_total = buffer[offset]
+        offset += 1
+        
+        # 1-byte elements
+        n1 = buffer[offset]
+        offset += 1
+        for _ in range(n1):
+            io_id = buffer[offset]
+            io_val = buffer[offset + 1]
+            io_elements[io_id] = io_val
+            offset += 2
+        
+        # 2-byte elements
+        n2 = buffer[offset]
+        offset += 1
+        for _ in range(n2):
+            io_id = buffer[offset]
+            io_val = int.from_bytes(buffer[offset+1:offset+3], 'big')
+            io_elements[io_id] = io_val
+            offset += 3
+        
+        # 4-byte elements
+        n4 = buffer[offset]
+        offset += 1
+        for _ in range(n4):
+            io_id = buffer[offset]
+            io_val = int.from_bytes(buffer[offset+1:offset+5], 'big')
+            io_elements[io_id] = io_val
+            offset += 5
+        
+        # 8-byte elements
+        n8 = buffer[offset]
+        offset += 1
+        for _ in range(n8):
+            io_id = buffer[offset]
+            io_val = int.from_bytes(buffer[offset+1:offset+9], 'big')
+            io_elements[io_id] = io_val
+            offset += 9
+        
+        records.append({
+            'timestamp': datetime.utcfromtimestamp(timestamp_ms / 1000.0),
+            'latitude': latitude,
+            'longitude': longitude,
+            'altitude': altitude,
+            'angle': angle,
+            'satellites': satellites,
+            'speed': speed,
+            'priority': priority,
+            'event_id': event_id,
+            'io_elements': io_elements
+        })
+    
+    return records
 
 def store_telemetry(imei, records):
-    """
-    Store telemetry using VIN extracted from GPS packet (OBD VIN - AVL ID 40410)
-    IMEI is used only for protocol handshake, not for vehicle lookup
-    """
+    """Store telemetry records in database"""
     try:
         conn = get_db()
         cur = conn.cursor()
         
-        print(f"📱 Device IMEI: {imei} (used only for handshake)")
+        vehicle_id = None
+        vin = None
         
-        records_inserted = 0
-        last_vin = None
+        # Try to extract VIN from first record's IO elements (IO ID 40005 = OBD VIN)
+        if records and records[0].get('io_elements'):
+            vin = records[0]['io_elements'].get(40005)
+            if vin:
+                # VIN might be bytes, convert to string
+                if isinstance(vin, bytes):
+                    vin = vin.decode('utf-8', errors='ignore')
+                print(f"📋 VIN detected from OBD: {vin}")
+                
+                # Find vehicle by VIN
+                cur.execute("SELECT id FROM vehicles WHERE vin = %s", (str(vin),))
+                result = cur.fetchone()
+                if result:
+                    vehicle_id = result[0]
+                    print(f"✅ Found vehicle by VIN: {vehicle_id}")
         
-        for record in records:
-            # Extract VIN from this record
-            vin = record.get('vin')
-            
-            if not vin:
-                print(f"⚠️ No VIN in GPS packet - skipping record")
-                print(f"   Timestamp: {record.get('timestamp')}")
-                print(f"   Location: {record.get('latitude')}, {record.get('longitude')}")
-                print(f"   IO Elements: {list(record.get('io_elements', {}).keys())}")
-                print(f"")
-                print(f"💡 Make sure FMB003 OBD VIN reading is enabled")
-                print(f"   VIN should be in AVL ID 40410")
-                continue
-            
-            last_vin = vin
-            print(f"")
-            print(f"🔍 Looking up vehicle by VIN: {vin}")
-            
-            # Find vehicle by VIN (NOT by IMEI!)
-            cur.execute("""
-                SELECT id, brand, model
-                FROM vehicles 
-                WHERE vin = %s
-            """, (vin,))
-            
+        # Fallback: Find vehicle by IMEI if VIN not found
+        if not vehicle_id:
+            print(f"⚠️ VIN not found in telemetry, falling back to IMEI lookup")
+            cur.execute("SELECT id FROM vehicles WHERE imei = %s OR fmb_serial = %s", (imei, imei))
             result = cur.fetchone()
             
-            if not result:
-                print(f"❌ No vehicle found for VIN: {vin}")
-                print(f"")
-                print(f"💡 ACTION REQUIRED:")
-                print(f"   Create vehicle with VIN '{vin}' in your web app")
-                continue
-            
-            vehicle_id = result[0]
-            brand = result[1] or 'Unknown'
-            model = result[2] or 'Unknown'
-            
-            print(f"✅ Found vehicle:")
-            print(f"   ID: {vehicle_id}")
-            print(f"   {brand} {model}")
-            print(f"   VIN: {vin}")
-            
-            # Insert telemetry record
-            try:
-                cur.execute("""
-                    INSERT INTO telemetry 
-                    (vehicle_id, timestamp, latitude, longitude, altitude, angle, satellites, speed, io_elements)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                """, (
-                    vehicle_id,
-                    record['timestamp'],
-                    record['latitude'],
-                    record['longitude'],
-                    record['altitude'],
-                    record['angle'],
-                    record['satellites'],
-                    record['speed'],
-                    json.dumps(record['io_elements'])
-                ))
-                records_inserted += 1
-                print(f"✅ Inserted telemetry record #{records_inserted}")
-                
-            except Exception as e:
-                print(f"⚠️ Failed to insert record: {e}")
+            if result:
+                vehicle_id = result[0]
+                print(f"✅ Found vehicle by IMEI: {vehicle_id}")
         
-        if records_inserted > 0 and last_vin:
-            # Update vehicle status, location, and last_seen
+        if not vehicle_id:
+            print(f"❌ Vehicle not found for IMEI: {imei}, VIN: {vin}")
+            cur.close()
+            conn.close()
+            return False
+        
+        # Insert telemetry records
+        for record in records:
             cur.execute("""
-                UPDATE vehicles 
-                SET 
-                    status = %s, 
-                    last_seen = NOW(),
-                    last_latitude = %s,
-                    last_longitude = %s
-                WHERE vin = %s
+                INSERT INTO telemetry 
+                (vehicle_id, timestamp, latitude, longitude, altitude, angle, satellites, speed, io_elements)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (
-                'online', 
-                records[-1]['latitude'],
-                records[-1]['longitude'],
-                last_vin
+                vehicle_id,
+                record['timestamp'],
+                record['latitude'],
+                record['longitude'],
+                record['altitude'],
+                record['angle'],
+                record['satellites'],
+                record['speed'],
+                json.dumps(record['io_elements'])
             ))
-            
-            conn.commit()
-            print(f"")
-            print(f"✅ SUCCESS!")
-            print(f"   Stored {records_inserted}/{len(records)} record(s)")
-            print(f"   Vehicle VIN: {last_vin}")
-            print(f"   Status: online")
-        elif records_inserted == 0:
-            print(f"")
-            print(f"❌ NO RECORDS STORED")
-            print(f"   Reason: No VIN found in packets OR vehicle doesn't exist")
         
+        # Update vehicle status
+        cur.execute(
+            "UPDATE vehicles SET status = %s WHERE id = %s",
+            ('online', vehicle_id)
+        )
+        
+        conn.commit()
         cur.close()
         conn.close()
-        return records_inserted > 0
+        print(f"✅ Stored {len(records)} telemetry records for vehicle {vehicle_id}")
+        return True
         
     except Exception as e:
         print(f"❌ Error storing telemetry: {e}")
-        import traceback
-        traceback.print_exc()
         return False
 
 # ─────── TELTONIKA TCP SERVER ───────
+
+# FIXED TELTONIKA TCP SERVER - Replace in backend/app.py
 
 def start_tcp_server():
     """Start TCP server to receive Teltonika data"""
@@ -597,7 +481,7 @@ def start_tcp_server():
                 
                 buffer += data
                 
-                # PHASE 1: IMEI Handshake (required by protocol)
+                # PHASE 1: IMEI Handshake
                 if imei is None:
                     if len(buffer) >= 2:
                         imei_len = int.from_bytes(buffer[0:2], 'big')
@@ -610,23 +494,23 @@ def start_tcp_server():
                             # Remove IMEI from buffer
                             buffer = buffer[2+imei_len:]
                             
-                            # Always accept IMEI (we use VIN for vehicle lookup, not IMEI)
+                            # Send ACK (0x01 = accepted, 0x00 = rejected)
                             client_socket.send(b'\x01')
-                            print(f"✅ IMEI handshake complete (IMEI ignored for lookup)")
+                            print(f"✅ IMEI handshake complete")
                             continue
                 
-                # PHASE 2: Codec 8 packets (extract VIN and store)
-                while len(buffer) >= 12:
+                # PHASE 2: Codec 8 packets
+                while len(buffer) >= 12:  # Minimum packet size
                     # Check preamble (4 bytes of 0x00)
                     preamble = int.from_bytes(buffer[0:4], 'big')
                     if preamble != 0:
                         print(f"❌ Invalid preamble: {hex(preamble)}")
-                        buffer = buffer[1:]
+                        buffer = buffer[1:]  # Skip one byte and try again
                         continue
                     
                     # Get data length
                     data_length = int.from_bytes(buffer[4:8], 'big')
-                    total_packet_size = 8 + data_length + 4
+                    total_packet_size = 8 + data_length + 4  # preamble + length + data + crc
                     
                     print(f"📦 Packet size: {total_packet_size} bytes (data: {data_length})")
                     
@@ -638,29 +522,33 @@ def start_tcp_server():
                     # Extract packet
                     packet = buffer[:total_packet_size]
                     
-                    # Validate CRC
+                    # Validate CRC (optional but recommended)
                     received_crc = int.from_bytes(packet[-4:], 'big')
                     calculated_crc = calculate_crc16(packet[8:-4])
                     
                     if received_crc != calculated_crc:
                         print(f"⚠️ CRC mismatch! Received: {hex(received_crc)}, Calculated: {hex(calculated_crc)}")
+                        # Still process it (some devices have CRC issues)
                     
-                    # Parse packet and extract VIN
+                    # Parse the packet
                     records = parse_codec8_packet(packet)
                     
                     if records:
-                        print(f"✅ Parsed {len(records)} record(s)")
+                        print(f"✅ Parsed {len(records)} records from {imei}")
                         
-                        # Store using VIN from packet
+                        # Store in database
                         if store_telemetry(imei, records):
+                            # Send ACK (number of records accepted)
                             ack = len(records).to_bytes(4, 'big')
                             client_socket.send(ack)
                             print(f"📤 Sent ACK: {len(records)} records")
                         else:
+                            # Send rejection
                             client_socket.send(b'\x00\x00\x00\x00')
                             print(f"❌ Sent rejection (storage failed)")
                     else:
                         print(f"❌ Failed to parse packet")
+                        # Send rejection
                         client_socket.send(b'\x00\x00\x00\x00')
                     
                     # Remove processed packet from buffer
@@ -673,7 +561,7 @@ def start_tcp_server():
             traceback.print_exc()
         finally:
             client_socket.close()
-            print(f"🔌 Device disconnected: {addr}")
+            print(f"❌ Device disconnected: {addr}")
     
     def run_server():
         server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -681,7 +569,6 @@ def start_tcp_server():
         server.bind(('0.0.0.0', TCP_PORT))
         server.listen(5)
         print(f"🚀 TCP server listening on 0.0.0.0:{TCP_PORT}")
-        print(f"🔍 VIN-based lookup enabled (OBD VIN - AVL ID 40410)")
         
         try:
             while True:
@@ -877,8 +764,7 @@ def api_health():
             "status": "ok", 
             "time": datetime.utcnow().isoformat() + "Z",
             "database": "connected",
-            "tcp_server": "running",
-            "vin_lookup": "enabled (OBD AVL ID 40410)"
+            "tcp_server": "running"
         })
     except Exception as e:
         return jsonify({
@@ -892,49 +778,48 @@ def api_health():
 def fmb_webhook():
     """
     Webhook for FMB003 to send GPS data via HTTP POST
-    (This is an alternative to TCP - still uses VIN if available)
+    
+    Expected JSON from FMB003:
+    {
+        "imei": "860123456789012",
+        "latitude": 54.6872,
+        "longitude": 25.2797,
+        "altitude": 45,
+        "angle": 180,
+        "satellites": 12,
+        "speed": 50,
+        "timestamp": "2025-12-12T10:30:45Z"
+    }
     """
     try:
         data = request.json
         print(f"📦 Received FMB data via webhook: {data}")
         
-        # Try to get VIN first (preferred)
-        vin = data.get("vin")
+        # Extract IMEI
         imei = data.get("imei")
+        if not imei:
+            print("❌ No IMEI in webhook data")
+            return jsonify({"error": "No IMEI provided"}), 400
         
-        if not vin and not imei:
-            print("❌ No VIN or IMEI in webhook data")
-            return jsonify({"error": "No VIN or IMEI provided"}), 400
+        print(f"📱 IMEI: {imei}")
         
+        # Get database connection
         conn = get_db()
         cur = conn.cursor()
         
         try:
-            vehicle_id = None
+            # Find vehicle by IMEI
+            cur.execute("SELECT id FROM vehicles WHERE imei = %s OR fmb_serial = %s", (imei, imei))
+            result = cur.fetchone()
             
-            # Try VIN first
-            if vin:
-                print(f"🔍 Looking up by VIN: {vin}")
-                cur.execute("SELECT id FROM vehicles WHERE vin = %s", (vin,))
-                result = cur.fetchone()
-                if result:
-                    vehicle_id = result[0]
-                    print(f"✅ Found vehicle by VIN: {vehicle_id}")
-            
-            # Fallback to IMEI if VIN not found
-            if not vehicle_id and imei:
-                print(f"⚠️ VIN not found, trying IMEI: {imei}")
-                cur.execute("SELECT id FROM vehicles WHERE imei = %s OR fmb_serial = %s", (imei, imei))
-                result = cur.fetchone()
-                if result:
-                    vehicle_id = result[0]
-                    print(f"✅ Found vehicle by IMEI: {vehicle_id}")
-            
-            if not vehicle_id:
-                print(f"❌ Vehicle not found for VIN: {vin}, IMEI: {imei}")
+            if not result:
+                print(f"❌ Vehicle not found for IMEI: {imei}")
                 cur.close()
                 conn.close()
-                return jsonify({"error": f"Vehicle not found"}), 404
+                return jsonify({"error": f"Vehicle not found for IMEI: {imei}"}), 404
+            
+            vehicle_id = result[0]
+            print(f"✅ Found vehicle ID: {vehicle_id}")
             
             # Extract location data
             latitude = data.get("latitude")
@@ -970,18 +855,19 @@ def fmb_webhook():
                 json.dumps(data.get("io_elements", {}))
             ))
             
-            # Update vehicle status
-            cur.execute("""
-                UPDATE vehicles 
-                SET status = %s, last_seen = NOW(), last_latitude = %s, last_longitude = %s
-                WHERE id = %s
-            """, ('online', latitude, longitude, vehicle_id))
+            # Update vehicle status to online
+            cur.execute(
+                "UPDATE vehicles SET status = %s WHERE id = %s",
+                ('online', vehicle_id)
+            )
             
             conn.commit()
             cur.close()
             conn.close()
             
             print(f"✅ Stored telemetry for vehicle {vehicle_id}")
+            print(f"📍 Location: {latitude}, {longitude}")
+            print(f"🚗 Speed: {speed} km/h")
             
             return jsonify({
                 "status": "ok",
@@ -1004,7 +890,7 @@ def fmb_webhook():
 
 @app.route("/api/telemetry/<imei>", methods=["GET"])
 def get_telemetry(imei):
-    """Get GPS data for a device (by IMEI for backward compatibility)"""
+    """Get GPS data for a device"""
     try:
         limit = request.args.get('limit', default=100, type=int)
         offset = request.args.get('offset', default=0, type=int)
@@ -1520,7 +1406,7 @@ def debug_columns():
 
 @app.route("/")
 def root():
-    return "Fleet backend running - VIN-based lookup from OBD (AVL ID 40410)", 200
+    return "Fleet backend running on PostgreSQL with Auth + Teltonika TCP", 200
 
 # --------------------- MAIN ------------------------
 
@@ -1535,7 +1421,6 @@ if __name__ == "__main__":
         print("\n2️⃣ Running migrations...")
         run_migrations()
         print("\n3️⃣ Starting Teltonika TCP server on port 5055...")
-        print("   🔍 VIN extraction enabled (OBD - AVL ID 40410)")
         start_tcp_server()
         print("\n✅ All systems ready!")
         print("=" * 60)
@@ -1546,8 +1431,7 @@ if __name__ == "__main__":
     
     # Flask runs on PORT env var (Railway sets this to 8080)
     # TCP server runs separately on port 5055
-    flask_port = int(os.environ.get("PORT", 8080))
+    flask_port = int(os.environ.get("PORT", 5000))
     print(f"\n🎯 Starting Flask HTTP server on port {flask_port}...")
-    print(f"📡 Teltonika TCP server on port 5055 (VIN-based)")
-    print(f"🔍 Vehicle lookup: VIN from OBD (AVL ID 40410)\n")
+    print(f"📡 Teltonika TCP server on port 5055 (separate)\n")
     app.run(host="0.0.0.0", port=flask_port, debug=False)
