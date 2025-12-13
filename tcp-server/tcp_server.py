@@ -307,14 +307,8 @@ def handle_client(client_socket, addr):
                 # Debug: Show packet hex
                 print(f"📦 Packet HEX (first 64 bytes): {packet[:64].hex()}")
                 
-                # Validate CRC
-                received_crc = int.from_bytes(packet[-4:], 'big')
-                calculated_crc = calculate_crc16(packet[8:-4])
-                
-                print(f"🔍 CRC - Received: {hex(received_crc)}, Calculated: {hex(calculated_crc)}")
-                
-                if received_crc != calculated_crc:
-                    print(f"⚠️ CRC mismatch!")
+                # Skip CRC validation - accept everything
+                print(f"⏭️ Skipping CRC validation")
                 
                 # Parse packet
                 records = parse_codec8_packet(packet)
