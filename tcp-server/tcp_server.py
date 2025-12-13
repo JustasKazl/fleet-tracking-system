@@ -7,6 +7,7 @@ import os
 import socket
 import threading
 from datetime import datetime
+from http.server import HTTPServer, BaseHTTPRequestHandler
 import psycopg
 import json
 
@@ -172,23 +173,47 @@ def store_telemetry(imei, records):
         vehicle_id = None
         vin = None
         
-        # Try to extract VIN from first record's IO elements
+        # Debug: Print all IO elements to see what we're receiving
         if records and records[0].get('io_elements'):
-            vin = records[0]['io_elements'].get(40410)
+            io_elements = records[0]['io_elements']
+            print(f"🔍 DEBUG: All IO Elements received: {list(io_elements.keys())}")
+            
+            # Try manual VIN first (40003)
+            vin = io_elements.get(40003)
+            if vin:
+                print(f"📋 VIN detected (Manual IO 40003): {vin}")
+            
+            # If no manual VIN, try OBD VIN (40005)
+            if not vin:
+                vin = io_elements.get(40005)
+                if vin:
+                    print(f"📋 VIN detected (OBD IO 40005): {vin}")
+            
+            # Also try AVL ID 410 (sometimes used for VIN)
+            if not vin:
+                vin = io_elements.get(410)
+                if vin:
+                    print(f"📋 VIN detected (AVL ID 410): {vin}")
+            
+            # Convert bytes to string if needed
             if vin:
                 if isinstance(vin, bytes):
                     vin = vin.decode('utf-8', errors='ignore')
-                print(f"📋 VIN detected from OBD: {vin}")
+                elif isinstance(vin, int):
+                    vin = str(vin)
                 
-                cur.execute("SELECT id FROM vehicles WHERE vin = %s", (str(vin),))
+                vin = str(vin).strip()
+                print(f"🔍 Looking up VIN in database: {vin}")
+                
+                cur.execute("SELECT id FROM vehicles WHERE vin = %s", (vin,))
                 result = cur.fetchone()
                 if result:
                     vehicle_id = result[0]
                     print(f"✅ Found vehicle by VIN: {vehicle_id}")
+            else:
+                print(f"⚠️ No VIN found in IO elements. Available IDs: {list(io_elements.keys())}")
         
-        # REMOVED IMEI FALLBACK - Now we require VIN or reject
         if not vehicle_id:
-            # Log unknown device to file
             log_unknown_device(imei, vin, records)
             print(f"❌ REJECTED: Vehicle not found for IMEI: {imei}, VIN: {vin}")
             cur.close()
@@ -213,7 +238,6 @@ def store_telemetry(imei, records):
                 json.dumps(record['io_elements'])
             ))
         
-        # Update vehicle status
         cur.execute("UPDATE vehicles SET status = %s WHERE id = %s", ('online', vehicle_id))
         
         conn.commit()
@@ -347,6 +371,65 @@ def run_server():
     finally:
         server.close()
 
+# ─────── HTTP LOG VIEWER ───────
+
+class LogViewerHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        if self.path == '/logs':
+            try:
+                # Read the log file
+                with open('/data/unknown_devices.log', 'r') as f:
+                    content = f.read()
+                
+                # Return as plain text
+                self.send_response(200)
+                self.send_header('Content-type', 'text/plain; charset=utf-8')
+                self.end_headers()
+                
+                if content:
+                    self.wfile.write(content.encode())
+                else:
+                    self.wfile.write(b'No unknown devices logged yet.')
+                    
+            except FileNotFoundError:
+                self.send_response(200)
+                self.send_header('Content-type', 'text/plain')
+                self.end_headers()
+                self.wfile.write(b'No unknown devices logged yet.')
+                
+        elif self.path == '/':
+            # Show info page
+            self.send_response(200)
+            self.send_header('Content-type', 'text/html')
+            self.end_headers()
+            html = """
+            <html>
+            <head><title>TCP Server Logs</title></head>
+            <body style="font-family: monospace; padding: 20px;">
+                <h1>🚀 Teltonika TCP Server</h1>
+                <p><a href="/logs">View Unknown Devices Log</a></p>
+            </body>
+            </html>
+            """
+            self.wfile.write(html.encode())
+        else:
+            self.send_response(404)
+            self.end_headers()
+    
+    def log_message(self, format, *args):
+        # Suppress HTTP request logs
+        pass
+
+def start_log_viewer():
+    """Start HTTP server for viewing logs"""
+    def run():
+        server = HTTPServer(('0.0.0.0', 8080), LogViewerHandler)
+        server.serve_forever()
+    
+    thread = threading.Thread(target=run, daemon=True)
+    thread.start()
+    print("📊 Log viewer available at http://<your-domain>:8080/logs")
+
 # ─────── MAIN ───────
 
 if __name__ == "__main__":
@@ -357,4 +440,8 @@ if __name__ == "__main__":
     print(f"🗄️ Database: Connected")
     print("=" * 60)
     
+    # Start HTTP log viewer
+    start_log_viewer()
+    
+    # Start TCP server (blocks forever)
     run_server()
