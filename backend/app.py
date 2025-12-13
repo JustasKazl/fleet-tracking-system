@@ -1431,7 +1431,7 @@ if __name__ == "__main__":
     
     # Flask runs on PORT env var (Railway sets this to 8080)
     # TCP server runs separately on port 5055
-    flask_port = int(os.environ.get("PORT", 5000))
+    flask_port = int(os.environ.get("PORT", 8080))
     print(f"\n🎯 Starting Flask HTTP server on port {flask_port}...")
     print(f"📡 Teltonika TCP server on port 5055 (separate)\n")
     app.run(host="0.0.0.0", port=flask_port, debug=False)
