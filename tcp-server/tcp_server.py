@@ -164,7 +164,7 @@ def parse_codec8_packet(buffer):
     return records
 
 def store_telemetry(imei, records):
-    """Store telemetry records in database"""
+    """Store telemetry records in database - Accept all connections, only store if VIN matches"""
     try:
         conn = get_db()
         cur = conn.cursor()
@@ -186,21 +186,33 @@ def store_telemetry(imei, records):
                     vehicle_id = result[0]
                     print(f"✅ Found vehicle by VIN: {vehicle_id}")
         
-        # REMOVED IMEI FALLBACK - Now we require VIN or reject
+        # Accept connection but don't store if no vehicle match
         if not vehicle_id:
-            # Log unknown device to file
-            log_unknown_device(imei, vin, records)
-            print(f"❌ REJECTED: Vehicle not found for IMEI: {imei}, VIN: {vin}")
+            print("=" * 60)
+            print(f"⚠️  DATA NOT STORED - No matching vehicle")
+            print(f"📱 IMEI: {imei}")
+            print(f"📋 VIN: {vin if vin else 'NOT PROVIDED'}")
+            print(f"📊 Records received: {len(records)}")
+            print("─" * 60)
+            for idx, record in enumerate(records, 1):
+                print(f"Record {idx}:")
+                print(f"  Timestamp: {record['timestamp']}")
+                print(f"  Location: {record['latitude']}, {record['longitude']}")
+                print(f"  Speed: {record['speed']} km/h")
+                print(f"  Satellites: {record['satellites']}")
+                print(f"  IO Elements: {record['io_elements']}")
+            print("=" * 60)
+            
             cur.close()
             conn.close()
-            return False
+            return True  # Accept the connection anyway
         
         # Insert telemetry records
         for record in records:
             cur.execute("""
                 INSERT INTO telemetry 
                 (vehicle_id, timestamp, latitude, longitude, altitude, angle, satellites, speed, io_elements)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             """, (
                 vehicle_id,
                 record['timestamp'],
@@ -224,7 +236,7 @@ def store_telemetry(imei, records):
         
     except Exception as e:
         print(f"❌ Error storing telemetry: {e}")
-        return False
+        return True  # Still accept the connection
 
 def log_unknown_device(imei, vin, records):
     """Log unknown device attempts"""
