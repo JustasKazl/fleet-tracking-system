@@ -17,7 +17,7 @@ DATABASE_URL = os.environ.get('DATABASE_URL')
 JWT_SECRET = os.environ.get('JWT_SECRET', 'your-secret-key-change-in-production')
 JWT_ALGORITHM = 'HS256'
 JWT_EXPIRATION_HOURS = 24
-TCP_PORT = int(os.environ.get('TCP_PORT', 5055))
+TCP_PORT = int(os.environ.get('TCP_PORT', 5060))
 
 # Check if DATABASE_URL is set
 if not DATABASE_URL:
