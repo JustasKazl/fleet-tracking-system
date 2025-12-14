@@ -128,9 +128,24 @@ def parse_avl_record(data, offset):
 def store_telemetry(vehicle_id, telemetry_data):
     """Store telemetry data in database"""
     try:
+        print("\n" + "="*70)
+        print("💾 ATTEMPTING TO INSERT INTO DATABASE:")
+        print("="*70)
+        print(f"vehicle_id      = {vehicle_id} (type: {type(vehicle_id)})")
+        print(f"timestamp       = {telemetry_data['timestamp']} (type: {type(telemetry_data['timestamp'])})")
+        print(f"latitude        = {telemetry_data['latitude']} (type: {type(telemetry_data['latitude'])})")
+        print(f"longitude       = {telemetry_data['longitude']} (type: {type(telemetry_data['longitude'])})")
+        print(f"altitude        = {telemetry_data['altitude']} (type: {type(telemetry_data['altitude'])})")
+        print(f"speed           = {telemetry_data['speed']} (type: {type(telemetry_data['speed'])})")
+        print(f"angle           = {telemetry_data['angle']} (type: {type(telemetry_data['angle'])})")
+        print(f"satellites      = {telemetry_data['satellites']} (type: {type(telemetry_data['satellites'])})")
+        print("="*70)
+        
         with get_db_connection() as conn:
             with conn.cursor() as cur:
-                cur.execute("""
+                # NOTE: Your schema has 'received_at' NOT 'created_at'
+                # Also removed priority and event_io_id since they're not in your schema
+                query = """
                     INSERT INTO telemetry (
                         vehicle_id,
                         timestamp,
@@ -140,11 +155,11 @@ def store_telemetry(vehicle_id, telemetry_data):
                         speed,
                         angle,
                         satellites,
-                        priority,
-                        event_io_id,
-                        created_at
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
-                """, (
+                        received_at
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                """
+                
+                values = (
                     vehicle_id,
                     telemetry_data['timestamp'],
                     telemetry_data['latitude'],
@@ -152,16 +167,27 @@ def store_telemetry(vehicle_id, telemetry_data):
                     telemetry_data['altitude'],
                     telemetry_data['speed'],
                     telemetry_data['angle'],
-                    telemetry_data['satellites'],
-                    telemetry_data['priority'],
-                    telemetry_data['event_io_id']
-                ))
+                    telemetry_data['satellites']
+                )
+                
+                print(f"SQL Query: {query}")
+                print(f"Values: {values}")
+                print("="*70)
+                
+                cur.execute(query, values)
                 conn.commit()
+                
+                print("✅ DATABASE INSERT SUCCESSFUL!")
+                print("="*70 + "\n")
                 return True
+                
     except Exception as e:
-        print(f"❌ Database error storing telemetry: {e}")
+        print(f"\n❌ DATABASE ERROR:")
+        print(f"Error Type: {type(e).__name__}")
+        print(f"Error Message: {e}")
         import traceback
         traceback.print_exc()
+        print("="*70 + "\n")
         return False
 
 def handle_client(client_socket, addr):
