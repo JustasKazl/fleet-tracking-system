@@ -3047,3 +3047,239 @@ body {
     opacity: 1;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   VEHICLES PAGE - UPDATED LAYOUT STYLES
+   Add this to your existing vehicles.css or main CSS file
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Header Layout - Title Left, Search Middle, Button Right */
+.vehicles-header {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  margin-bottom: 2rem;
+}
+
+.vehicles-title-block {
+  flex-shrink: 0;
+}
+
+.vehicles-page-title {
+  font-size: 1.875rem;
+  font-weight: 700;
+  margin: 0;
+  color: var(--text-primary, #fff);
+}
+
+.vehicles-page-sub {
+  font-size: 0.875rem;
+  color: var(--text-muted, #a0aec0);
+  margin: 0.25rem 0 0 0;
+}
+
+/* Search Bar - Middle (grows to fill space) */
+.vehicles-search-bar {
+  flex: 1;
+  position: relative;
+  max-width: 500px;
+  margin: 0; /* Remove bottom margin since it's inline now */
+}
+
+/* Search Input */
+.search-input {
+  width: 100%;
+  padding: 0.75rem 3rem 0.75rem 1rem;
+  font-size: 0.875rem;
+  border: 1px solid var(--border-color, #2d3748);
+  border-radius: 0.5rem;
+  background: var(--card-bg, #1a202c);
+  color: var(--text-primary, #fff);
+  transition: all 0.2s ease;
+}
+
+.search-input::placeholder {
+  color: var(--text-muted, #a0aec0);
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: var(--primary-color, #667eea);
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+/* Clear Button */
+.search-clear-btn {
+  position: absolute;
+  right: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: var(--text-muted, #a0aec0);
+  font-size: 1.25rem;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  transition: all 0.2s ease;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+}
+
+.search-clear-btn:hover {
+  color: var(--text-primary, #fff);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* Add Button - Right Side */
+.vehicles-header .btn-primary {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* Search Results Info */
+.search-results-info {
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+  background: var(--card-bg, #1a202c);
+  border: 1px solid var(--border-color, #2d3748);
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--text-muted, #a0aec0);
+}
+
+.search-results-info strong {
+  color: var(--primary-color, #667eea);
+  font-weight: 600;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   VEHICLE CARDS - MORE SQUARE LAYOUT
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Grid - More columns for more square cards */
+.vehicles-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 1.5rem;
+}
+
+/* Make cards more square */
+.vehicle-card {
+  aspect-ratio: 1.2 / 1; /* Slightly wider than square but not super wide */
+  display: flex;
+  flex-direction: column;
+  background: var(--card-bg, #1a202c);
+  border: 1px solid var(--border-color, #2d3748);
+  border-radius: 0.75rem;
+  padding: 1.25rem;
+  transition: all 0.2s ease;
+}
+
+.vehicle-card:hover {
+  border-color: var(--primary-color, #667eea);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+/* Vehicle card sections */
+.vehicle-card-top {
+  flex-shrink: 0;
+  margin-bottom: 1rem;
+}
+
+.vehicle-meta {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.vehicle-meta-item {
+  min-height: 0; /* Allow items to shrink */
+}
+
+.vehicle-footer {
+  flex-shrink: 0;
+  margin-top: auto;
+}
+
+/* Empty State Styling (if not already present) */
+.empty-state {
+  text-align: center;
+  padding: 4rem 2rem;
+}
+
+.empty-state-icon {
+  font-size: 4rem;
+  margin-bottom: 1rem;
+  opacity: 0.5;
+}
+
+.empty-state-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  color: var(--text-primary, #fff);
+}
+
+.empty-state-text {
+  color: var(--text-muted, #a0aec0);
+  margin-bottom: 1.5rem;
+  max-width: 400px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   RESPONSIVE DESIGN
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Tablet */
+@media (max-width: 1024px) {
+  .vehicles-grid {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  }
+}
+
+/* Mobile - Stack header */
+@media (max-width: 768px) {
+  .vehicles-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1rem;
+  }
+  
+  .vehicles-search-bar {
+    max-width: 100%;
+  }
+  
+  .vehicles-header .btn-primary {
+    width: 100%;
+  }
+  
+  .vehicles-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .vehicle-card {
+    aspect-ratio: auto; /* Remove aspect ratio on mobile */
+  }
+}
+
+/* Small Mobile */
+@media (max-width: 480px) {
+  .search-input {
+    font-size: 0.875rem;
+    padding: 0.625rem 2.5rem 0.625rem 0.875rem;
+  }
+  
+  .vehicles-page-title {
+    font-size: 1.5rem;
+  }
+}
