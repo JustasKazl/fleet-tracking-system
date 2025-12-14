@@ -1,6 +1,8 @@
 import { useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
-import geocoding from "../utils/geocoding";
+
+// Simple in-memory cache for reverse geocoding results
+const locationCache = new Map();
 
 function VehicleCard({ vehicle, onDelete, onEdit }) {
   const {
@@ -42,22 +44,77 @@ function VehicleCard({ vehicle, onDelete, onEdit }) {
   const avatarLetter = brand?.[0]?.toUpperCase() || "?";
   const navigate = useNavigate();
 
-  // Fetch location name using shared geocoding utility
+  // Reverse geocoding with caching
+  const getLocationName = async (lat, lon) => {
+    if (!lat || !lon) {
+      setLocationName("Nežinoma vieta");
+      return;
+    }
+
+    // Round coordinates to 2 decimal places for cache key (approx 1km accuracy)
+    const cacheKey = `${lat.toFixed(2)},${lon.toFixed(2)}`;
+
+    // Check cache first
+    if (locationCache.has(cacheKey)) {
+      setLocationName(locationCache.get(cacheKey));
+      return;
+    }
+
+    setLoadingLocation(true);
+    
+    try {
+      // Using Nominatim API - Free, no API key required
+      // Rate limit: 1 request/second, max 1 request per IP
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?` +
+        `lat=${lat}&lon=${lon}&format=json&accept-language=lt&zoom=10`,
+        {
+          headers: {
+            'User-Agent': 'FleetTrack/1.0'
+          }
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Geocoding failed");
+      }
+
+      const data = await response.json();
+      
+      // Extract city/town/village name
+      const city = 
+        data.address?.city || 
+        data.address?.town || 
+        data.address?.village || 
+        data.address?.municipality ||
+        data.address?.county ||
+        "Nežinoma vieta";
+      
+      // Cache the result
+      locationCache.set(cacheKey, city);
+      setLocationName(city);
+      
+    } catch (error) {
+      console.error("Reverse geocoding error:", error);
+      const fallback = "Nežinoma vieta";
+      locationCache.set(cacheKey, fallback);
+      setLocationName(fallback);
+    } finally {
+      setLoadingLocation(false);
+    }
+  };
+
+  // Fetch location name when component mounts
   useEffect(() => {
     if (last_latitude && last_longitude) {
-      setLoadingLocation(true);
-      
-      geocoding.getLocationName(last_latitude, last_longitude)
-        .then(location => {
-          setLocationName(location);
-        })
-        .catch(error => {
-          console.error("Failed to get location:", error);
-          setLocationName("Nežinoma vieta");
-        })
-        .finally(() => {
-          setLoadingLocation(false);
-        });
+      // Add random delay to respect Nominatim rate limits
+      // Spread requests over time when loading multiple cards
+      const delay = Math.random() * 2000; // 0-2 seconds
+      const timer = setTimeout(() => {
+        getLocationName(last_latitude, last_longitude);
+      }, delay);
+
+      return () => clearTimeout(timer);
     } else {
       setLocationName("Nėra duomenų");
     }
