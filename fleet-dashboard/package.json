@@ -16,10 +16,10 @@
     "axios": "^1.13.2",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "react-router-dom": "^7.10.1"
+    "react-router-dom": "^7.10.1",
     "react-leaflet": "^4.2.1",
     "leaflet": "^1.9.4",
-    "lucide-react": "^0.263.1",
+    "lucide-react": "^0.263.1"
   },
 
   "devDependencies": {
