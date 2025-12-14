@@ -17,9 +17,9 @@ function MapComponent({ vehicleId, vehicleImei, token, autoRefreshInterval = 100
   /* ---------------- HELPERS ---------------- */
 
   const getSpeedColor = (speed = 0) => {
-    if (speed < 50) return "green";
-    if (speed < 90) return "yellow";
-    return "red";
+    if (speed < 50) return "#2ECC71";
+    if (speed < 90) return "#F39C12";
+    return "#E74C3C";
   };
 
   const createCarIcon = (heading = 0) => `
