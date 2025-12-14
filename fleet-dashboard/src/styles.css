@@ -2690,3 +2690,170 @@ body {
     font-size: 11px;
   }
 }
+/* ═══════════════════════════════════════════════════════════════
+   ADDITIONAL STYLES FOR IMPROVED VEHICLE DETAILS PAGE
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ─────── UPLOAD BUTTON FOR MISSING DOCUMENTS ─────── */
+.btn-upload-missing {
+  margin-top: 12px;
+  width: 100%;
+  padding: 10px 16px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-alt));
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.btn-upload-missing:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
+}
+
+.btn-upload-missing:active {
+  transform: translateY(0);
+}
+
+/* ─────── ENHANCED EMPTY STATES ─────── */
+.empty-state-small .btn-ghost {
+  background: rgba(102, 126, 234, 0.1);
+  border: 1px solid rgba(102, 126, 234, 0.3);
+  color: var(--accent);
+}
+
+.empty-state-small .btn-ghost:hover {
+  background: rgba(102, 126, 234, 0.2);
+  border-color: var(--accent);
+}
+
+/* ─────── DOCUMENT UPLOAD MODAL FILE INPUT STYLING ─────── */
+.modal-form input[type="file"] {
+  padding: 10px;
+  background: rgba(10, 1, 24, 0.3);
+  border: 2px dashed var(--border-color);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.modal-form input[type="file"]:hover {
+  border-color: var(--accent);
+  background: rgba(102, 126, 234, 0.05);
+}
+
+.modal-form input[type="file"]:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: rgba(102, 126, 234, 0.08);
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+}
+
+/* ─────── FILE PREVIEW INFO ─────── */
+.file-preview-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(102, 126, 234, 0.08);
+  border: 1px solid rgba(102, 126, 234, 0.2);
+  border-radius: 6px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* ─────── ENHANCED DOCUMENT ACTIONS ─────── */
+.btn-doc-view,
+.btn-doc-delete {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+/* ─────── SERVICE TIMELINE ENHANCEMENTS ─────── */
+.service-timeline-content:hover .btn-delete-icon {
+  opacity: 1;
+}
+
+.btn-delete-icon {
+  opacity: 0.6;
+}
+
+/* ─────── RESPONSIVE IMPROVEMENTS ─────── */
+@media (max-width: 768px) {
+  .btn-upload-missing {
+    font-size: 12px;
+    padding: 8px 12px;
+  }
+  
+  .key-doc-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+  
+  .btn-doc-view,
+  .btn-doc-delete {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* ─────── MODAL FORM ENHANCEMENTS ─────── */
+.modal-form label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.modal-form select {
+  cursor: pointer;
+}
+
+.modal-form select option {
+  background: var(--bg-elevated-soft);
+  color: var(--text-main);
+}
+
+/* ─────── IMPROVED SECTION HEADERS ─────── */
+.section-header > div {
+  flex: 1;
+}
+
+.section-header button {
+  flex-shrink: 0;
+}
+
+/* ─────── LOADING STATES ─────── */
+.modal-form button[disabled] {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.modal-form input[disabled],
+.modal-form select[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ─────── IMPROVED TOOLTIPS FOR FILE INPUTS ─────── */
+.form-field small {
+  display: block;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 6px;
+  line-height: 1.4;
+}
+
+/* ─────── ENHANCED CONFIRM MODAL ─────── */
+.modal-message {
+  margin: 16px 0 24px 0;
+  color: var(--text-muted);
+  line-height: 1.6;
+  font-size: 14px;
+}
