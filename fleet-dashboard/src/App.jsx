@@ -3,7 +3,6 @@ import { AuthProvider, useAuth } from "./context/AuthContext";
 import LandingPage from "./pages/LandingPage";
 import Dashboard from "./pages/Dashboard";
 import VehiclesPage from "./pages/VehiclesPage";
-import AddVehiclePage from "./pages/AddVehiclePage";
 import VehicleDetailsPage from "./pages/VehicleDetailsPage";
 import TermsOfService from "./pages/TermsOfService";
 import PrivacyPolicy from "./pages/Privacy";
@@ -34,10 +33,6 @@ function AppRoutes() {
       <Route 
         path="/vehicles" 
         element={isAuthenticated ? <VehiclesPage /> : <Navigate to="/" replace />} 
-      />
-      <Route 
-        path="/vehicles/add" 
-        element={isAuthenticated ? <AddVehiclePage /> : <Navigate to="/" replace />} 
       />
       <Route 
         path="/vehicles/:id" 
