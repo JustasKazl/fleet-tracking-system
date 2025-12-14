@@ -59,7 +59,7 @@ function MapComponent({ vehicleId, vehicleImei, token, autoRefreshInterval = 100
     if (!isInitial) setRefreshing(true);
 
     try {
-      const res = await fetch(`${API_BASE_URL}/api/telemetry/${vehicleImei}?limit=1`, {
+      const res = await fetch(`${API_BASE_URL}/api/telemetry/${vehicleImei}`, {
         headers: {
           "Authorization": `Bearer ${token}`,
         },
