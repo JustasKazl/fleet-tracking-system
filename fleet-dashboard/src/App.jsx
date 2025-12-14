@@ -4,7 +4,6 @@ import LandingPage from "./pages/LandingPage";
 import Dashboard from "./pages/Dashboard";
 import VehiclesPage from "./pages/VehiclesPage";
 import AddVehiclePage from "./pages/AddVehiclePage";
-import EditVehiclePage from "./pages/EditVehiclePage";
 import VehicleDetailsPage from "./pages/VehicleDetailsPage";
 import TermsOfService from "./pages/TermsOfService";
 import PrivacyPolicy from "./pages/Privacy";
