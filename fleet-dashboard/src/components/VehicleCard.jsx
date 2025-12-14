@@ -49,7 +49,7 @@ function VehicleCard({ vehicle, onDelete }) {
 
   // Helper to format last seen time
   const formatLastSeen = (timestamp) => {
-    if (!timestamp) return "Niekada";
+    if (!timestamp) return "Nėra";
     try {
       const date = new Date(timestamp);
       const now = new Date();
