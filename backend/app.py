@@ -107,7 +107,7 @@ def init_db():
         """)
         print("✅ users table created/verified")
 
-        # Create vehicles table with user_id foreign key (IMEI-ONLY)
+        # Create vehicles table with user_id foreign key (IMEI-ONLY, minimal)
         cur.execute("""
         CREATE TABLE IF NOT EXISTS vehicles (
             id SERIAL PRIMARY KEY,
@@ -941,13 +941,30 @@ def get_track(imei):
 @app.route("/api/vehicles", methods=["GET"])
 @require_auth
 def api_get_vehicles(user_id):
-    """Get all vehicles for the authenticated user"""
+    """Get all vehicles for the authenticated user with latest telemetry"""
     conn = get_db()
     cur = conn.cursor(cursor_factory=RealDictCursor)
-    cur.execute(
-        "SELECT * FROM vehicles WHERE user_id = %s ORDER BY created_at DESC",
-        (user_id,)
-    )
+    
+    # Get all vehicles with their latest telemetry in a single query
+    cur.execute("""
+        SELECT 
+            v.*,
+            t.latitude as last_latitude,
+            t.longitude as last_longitude,
+            t.timestamp as last_seen,
+            t.speed as last_speed
+        FROM vehicles v
+        LEFT JOIN LATERAL (
+            SELECT latitude, longitude, timestamp, speed
+            FROM telemetry
+            WHERE vehicle_id = v.id
+            ORDER BY timestamp DESC
+            LIMIT 1
+        ) t ON true
+        WHERE v.user_id = %s
+        ORDER BY v.created_at DESC
+    """, (user_id,))
+    
     rows = cur.fetchall()
     cur.close()
     conn.close()
@@ -1013,13 +1030,30 @@ def api_add_vehicle(user_id):
 @app.route("/api/vehicles/<int:vehicle_id>", methods=["GET"])
 @require_auth
 def api_get_vehicle(user_id, vehicle_id):
-    """Get a specific vehicle (only if it belongs to the user)"""
+    """Get a specific vehicle with latest telemetry (only if it belongs to the user)"""
     conn = get_db()
     cur = conn.cursor(cursor_factory=RealDictCursor)
-    cur.execute(
-        "SELECT * FROM vehicles WHERE id = %s AND user_id = %s",
-        (vehicle_id, user_id)
-    )
+    
+    # Get vehicle with latest telemetry in single query
+    cur.execute("""
+        SELECT 
+            v.*,
+            t.latitude as last_latitude,
+            t.longitude as last_longitude,
+            t.timestamp as last_seen,
+            t.speed as last_speed,
+            t.altitude as last_altitude
+        FROM vehicles v
+        LEFT JOIN LATERAL (
+            SELECT latitude, longitude, timestamp, speed, altitude
+            FROM telemetry
+            WHERE vehicle_id = v.id
+            ORDER BY timestamp DESC
+            LIMIT 1
+        ) t ON true
+        WHERE v.id = %s AND v.user_id = %s
+    """, (vehicle_id, user_id))
+    
     row = cur.fetchone()
     cur.close()
     conn.close()
