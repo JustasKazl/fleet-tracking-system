@@ -11,6 +11,7 @@ from psycopg2.extras import RealDictCursor
 from werkzeug.security import generate_password_hash, check_password_hash
 import jwt
 import json
+from flask import request, jsonify
 
 # Configuration
 DATABASE_URL = os.environ.get('DATABASE_URL')
@@ -1404,6 +1405,343 @@ def debug_columns():
 @app.route("/")
 def root():
     return "Fleet backend running on PostgreSQL with Auth + Teltonika TCP (IMEI-ONLY)", 200
+
+# ---------------------- TRIP DETECTION & HISTORY ----------------------
+
+@app.route("/api/vehicles/<int:vehicle_id>/trips", methods=["GET"])
+@require_auth
+def api_get_trips(user_id, vehicle_id):
+    """
+    Get trip history for a vehicle with optional filtering
+    
+    Query parameters:
+    - start_date: YYYY-MM-DD (default: 30 days ago)
+    - end_date: YYYY-MM-DD (default: today)
+    - min_duration: minimum trip duration in minutes (default: 5)
+    - min_distance: minimum trip distance in km (default: 1)
+    """
+    try:
+        conn = get_db()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # Verify vehicle ownership
+        cur.execute(
+            "SELECT id FROM vehicles WHERE id = %s AND user_id = %s",
+            (vehicle_id, user_id)
+        )
+        if not cur.fetchone():
+            cur.close()
+            conn.close()
+            return jsonify({"error": "Vehicle not found"}), 404
+        
+        # Get query parameters
+        start_date = request.args.get('start_date', 
+            (datetime.utcnow() - timedelta(days=30)).strftime('%Y-%m-%d'))
+        end_date = request.args.get('end_date', 
+            datetime.utcnow().strftime('%Y-%m-%d'))
+        min_duration = int(request.args.get('min_duration', 5))  # minutes
+        min_distance = float(request.args.get('min_distance', 1.0))  # km
+        
+        # Simple approach: Get all telemetry data and process in Python
+        cur.execute("""
+            SELECT 
+                timestamp,
+                latitude,
+                longitude,
+                speed
+            FROM telemetry
+            WHERE vehicle_id = %s
+                AND timestamp >= %s::timestamp
+                AND timestamp <= %s::timestamp + interval '1 day'
+            ORDER BY timestamp ASC
+        """, (vehicle_id, start_date, end_date))
+        
+        telemetry = cur.fetchall()
+        
+        # Detect trips in Python
+        trips = []
+        current_trip = None
+        SPEED_THRESHOLD = 5  # km/h
+        STOP_TIME_THRESHOLD = 300  # 5 minutes in seconds
+        
+        for i, point in enumerate(telemetry):
+            if point['speed'] >= SPEED_THRESHOLD:
+                if current_trip is None:
+                    # Start new trip
+                    current_trip = {
+                        'start_time': point['timestamp'],
+                        'start_lat': point['latitude'],
+                        'start_lon': point['longitude'],
+                        'points': [point],
+                        'max_speed': point['speed']
+                    }
+                else:
+                    # Continue trip
+                    current_trip['points'].append(point)
+                    current_trip['max_speed'] = max(current_trip['max_speed'], point['speed'])
+            else:
+                if current_trip is not None:
+                    # Check if we should end the trip
+                    if i < len(telemetry) - 1:
+                        next_point = telemetry[i + 1]
+                        time_diff = (next_point['timestamp'] - point['timestamp']).total_seconds()
+                        
+                        if time_diff > STOP_TIME_THRESHOLD:
+                            # End trip
+                            current_trip['end_time'] = point['timestamp']
+                            current_trip['end_lat'] = point['latitude']
+                            current_trip['end_lon'] = point['longitude']
+                            
+                            # Calculate statistics
+                            duration = (current_trip['end_time'] - current_trip['start_time']).total_seconds() / 60
+                            
+                            # Calculate distance
+                            distance = 0
+                            for j in range(len(current_trip['points']) - 1):
+                                p1 = current_trip['points'][j]
+                                p2 = current_trip['points'][j + 1]
+                                
+                                # Haversine formula
+                                from math import radians, cos, sin, asin, sqrt
+                                lat1, lon1, lat2, lon2 = map(radians, [p1['latitude'], p1['longitude'], 
+                                                                        p2['latitude'], p2['longitude']])
+                                dlon = lon2 - lon1
+                                dlat = lat2 - lat1
+                                a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
+                                c = 2 * asin(sqrt(a))
+                                distance += 6371 * c  # Earth radius in km
+                            
+                            # Calculate average speed
+                            avg_speed = sum(p['speed'] for p in current_trip['points']) / len(current_trip['points'])
+                            
+                            if duration >= min_duration and distance >= min_distance:
+                                trips.append({
+                                    'start_time': current_trip['start_time'].isoformat(),
+                                    'end_time': current_trip['end_time'].isoformat(),
+                                    'start_lat': current_trip['start_lat'],
+                                    'start_lon': current_trip['start_lon'],
+                                    'end_lat': current_trip['end_lat'],
+                                    'end_lon': current_trip['end_lon'],
+                                    'duration_minutes': round(duration, 1),
+                                    'distance_km': round(distance, 2),
+                                    'avg_speed': round(avg_speed, 1),
+                                    'max_speed': round(current_trip['max_speed'], 1)
+                                })
+                            
+                            current_trip = None
+        
+        # Handle trip that didn't end
+        if current_trip is not None and len(current_trip['points']) > 0:
+            last_point = current_trip['points'][-1]
+            current_trip['end_time'] = last_point['timestamp']
+            current_trip['end_lat'] = last_point['latitude']
+            current_trip['end_lon'] = last_point['longitude']
+            
+            duration = (current_trip['end_time'] - current_trip['start_time']).total_seconds() / 60
+            
+            # Calculate distance
+            distance = 0
+            for j in range(len(current_trip['points']) - 1):
+                p1 = current_trip['points'][j]
+                p2 = current_trip['points'][j + 1]
+                
+                from math import radians, cos, sin, asin, sqrt
+                lat1, lon1, lat2, lon2 = map(radians, [p1['latitude'], p1['longitude'], 
+                                                        p2['latitude'], p2['longitude']])
+                dlon = lon2 - lon1
+                dlat = lat2 - lat1
+                a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
+                c = 2 * asin(sqrt(a))
+                distance += 6371 * c
+            
+            avg_speed = sum(p['speed'] for p in current_trip['points']) / len(current_trip['points'])
+            
+            if duration >= min_duration and distance >= min_distance:
+                trips.append({
+                    'start_time': current_trip['start_time'].isoformat(),
+                    'end_time': current_trip['end_time'].isoformat(),
+                    'start_lat': current_trip['start_lat'],
+                    'start_lon': current_trip['start_lon'],
+                    'end_lat': current_trip['end_lat'],
+                    'end_lon': current_trip['end_lon'],
+                    'duration_minutes': round(duration, 1),
+                    'distance_km': round(distance, 2),
+                    'avg_speed': round(avg_speed, 1),
+                    'max_speed': round(current_trip['max_speed'], 1)
+                })
+        
+        # Reverse to show newest first
+        trips.reverse()
+        
+        cur.close()
+        conn.close()
+        
+        return jsonify(trips), 200
+        
+    except Exception as e:
+        print(f"Error fetching trips: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": "Failed to fetch trips"}), 500
+
+
+
+@app.route("/api/vehicles/<int:vehicle_id>/trips/stats", methods=["GET"])
+@require_auth
+def api_get_trip_stats(user_id, vehicle_id):
+    """
+    Get trip statistics for a vehicle
+    
+    Query parameters:
+    - start_date: YYYY-MM-DD (default: 30 days ago)
+    - end_date: YYYY-MM-DD (default: today)
+    """
+    try:
+        conn = get_db()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # Verify vehicle ownership
+        cur.execute(
+            "SELECT id FROM vehicles WHERE id = %s AND user_id = %s",
+            (vehicle_id, user_id)
+        )
+        if not cur.fetchone():
+            cur.close()
+            conn.close()
+            return jsonify({"error": "Vehicle not found"}), 404
+        
+        # Get query parameters
+        start_date = request.args.get('start_date', 
+            (datetime.utcnow() - timedelta(days=30)).strftime('%Y-%m-%d'))
+        end_date = request.args.get('end_date', 
+            datetime.utcnow().strftime('%Y-%m-%d'))
+        
+        # Get statistics
+        cur.execute("""
+            SELECT 
+                COUNT(*) as total_trips,
+                SUM(
+                    6371 * acos(
+                        cos(radians(t1.latitude)) * 
+                        cos(radians(t2.latitude)) * 
+                        cos(radians(t2.longitude) - radians(t1.longitude)) + 
+                        sin(radians(t1.latitude)) * 
+                        sin(radians(t2.latitude))
+                    )
+                ) as total_distance_km,
+                AVG(speed) as avg_speed,
+                MAX(speed) as max_speed,
+                COUNT(DISTINCT DATE(timestamp)) as days_with_activity,
+                SUM(CASE WHEN speed > 90 THEN 1 ELSE 0 END) as speeding_events
+            FROM telemetry t1
+            JOIN telemetry t2 ON t2.id = t1.id + 1
+            WHERE t1.vehicle_id = %s
+                AND t1.timestamp >= %s::timestamp
+                AND t1.timestamp <= %s::timestamp + interval '1 day'
+        """, (vehicle_id, start_date, end_date))
+        
+        stats = cur.fetchone()
+        
+        # Get daily breakdown
+        cur.execute("""
+            SELECT 
+                DATE(timestamp) as date,
+                COUNT(*) as points,
+                SUM(
+                    6371 * acos(
+                        cos(radians(t1.latitude)) * 
+                        cos(radians(t2.latitude)) * 
+                        cos(radians(t2.longitude) - radians(t1.longitude)) + 
+                        sin(radians(t1.latitude)) * 
+                        sin(radians(t2.latitude))
+                    )
+                ) as distance_km,
+                AVG(speed) as avg_speed,
+                MAX(speed) as max_speed
+            FROM telemetry t1
+            JOIN telemetry t2 ON t2.id = t1.id + 1
+            WHERE t1.vehicle_id = %s
+                AND t1.timestamp >= %s::timestamp
+                AND t1.timestamp <= %s::timestamp + interval '1 day'
+            GROUP BY DATE(timestamp)
+            ORDER BY date DESC
+        """, (vehicle_id, start_date, end_date))
+        
+        daily_stats = cur.fetchall()
+        
+        cur.close()
+        conn.close()
+        
+        return jsonify({
+            "summary": stats,
+            "daily": daily_stats
+        }), 200
+        
+    except Exception as e:
+        print(f"Error fetching trip stats: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": "Failed to fetch trip statistics"}), 500
+
+
+@app.route("/api/vehicles/<int:vehicle_id>/trips/<trip_id>/route", methods=["GET"])
+@require_auth
+def api_get_trip_route(user_id, vehicle_id, trip_id):
+    """
+    Get detailed route for a specific trip
+    
+    Path parameters:
+    - trip_id: format "START_TIMESTAMP-END_TIMESTAMP" (ISO 8601)
+    """
+    try:
+        conn = get_db()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # Verify vehicle ownership
+        cur.execute(
+            "SELECT id FROM vehicles WHERE id = %s AND user_id = %s",
+            (vehicle_id, user_id)
+        )
+        if not cur.fetchone():
+            cur.close()
+            conn.close()
+            return jsonify({"error": "Vehicle not found"}), 404
+        
+        # Parse trip_id
+        try:
+            start_time, end_time = trip_id.split('_TO_')
+        except:
+            return jsonify({"error": "Invalid trip_id format"}), 400
+        
+        # Get route points
+        cur.execute("""
+            SELECT 
+                timestamp,
+                latitude,
+                longitude,
+                speed,
+                altitude,
+                satellites,
+                angle
+            FROM telemetry
+            WHERE vehicle_id = %s
+                AND timestamp >= %s::timestamp
+                AND timestamp <= %s::timestamp
+            ORDER BY timestamp ASC
+        """, (vehicle_id, start_time, end_time))
+        
+        route = cur.fetchall()
+        
+        cur.close()
+        conn.close()
+        
+        return jsonify(route), 200
+        
+    except Exception as e:
+        print(f"Error fetching trip route: {e}")
+        return jsonify({"error": "Failed to fetch trip route"}), 500
+
+
 
 # --------------------- MAIN ------------------------
 
