@@ -1269,10 +1269,8 @@ body {
 
 .row-main {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   gap: 14px;
-  flex-grow: 1;
-  min-height: 0;
 }
 
 .left-column {
@@ -1280,6 +1278,7 @@ body {
   flex-direction: column;
   gap: 14px;
   height: 100%;
+  min-width: 0;
 }
 
 .row-left-top {
