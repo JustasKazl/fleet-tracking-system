@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import DashboardLayout from "../layout/DashboardLayout";
 import VehicleCard from "../components/VehicleCard";
 import VehicleFormModal from "../components/VehicleFormModal";
+import ConfirmModal from "../components/ConfirmModal";
 import { useToast } from "../context/ToastContext";
 import { useAuth } from "../context/AuthContext";
 import API_BASE_URL from "../api";
@@ -17,6 +18,7 @@ function VehiclesPage() {
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingVehicle, setEditingVehicle] = useState(null);
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
 
   useEffect(() => {
     if (token) {
@@ -42,13 +44,17 @@ function VehiclesPage() {
     setLoading(false);
   }
 
-  async function handleDelete(id) {
-    if (!window.confirm("Ar tikrai norite pašalinti šį automobilį?")) {
-      return;
-    }
+  function handleDeleteClick(id) {
+    // Find the vehicle to show its details in the confirm modal
+    const vehicle = vehicles.find(v => v.id === id);
+    setDeleteConfirm({ id, vehicle });
+  }
+
+  async function confirmDelete() {
+    if (!deleteConfirm) return;
 
     try {
-      const res = await fetch(`${API_BASE_URL}/api/vehicles/${id}`, {
+      const res = await fetch(`${API_BASE_URL}/api/vehicles/${deleteConfirm.id}`, {
         method: "DELETE",
         headers: {
           "Authorization": `Bearer ${token}`,
@@ -64,6 +70,8 @@ function VehiclesPage() {
     } catch (err) {
       console.error(err);
       showToast("Klaida šalinant automobilį", "error");
+    } finally {
+      setDeleteConfirm(null);
     }
   }
 
@@ -105,14 +113,14 @@ function VehiclesPage() {
 
   return (
     <DashboardLayout>
-      {/* Header Section - Redesigned Layout */}
+      {/* Header Section */}
       <div className="vehicles-header">
         <div className="vehicles-title-block">
           <h1 className="vehicles-page-title">Automobiliai</h1>
           <p className="vehicles-page-sub">Valdykite savo automobilių parką</p>
         </div>
         
-        {/* Search Bar - Middle */}
+        {/* Search Bar */}
         <div className="vehicles-search-bar">
           <input
             type="text"
@@ -132,7 +140,7 @@ function VehiclesPage() {
           )}
         </div>
 
-        {/* Add Button - Right */}
+        {/* Add Button */}
         <button className="btn-primary" onClick={openAddModal}>
           ➕ Pridėti automobilį
         </button>
@@ -177,25 +185,38 @@ function VehiclesPage() {
           </div>
         )
       ) : (
-        // Vehicle Cards Grid - ORIGINAL STYLE
+        // Vehicle Cards Grid
         <div className="vehicles-grid">
           {filteredVehicles.map((v) => (
             <VehicleCard
               key={v.id}
               vehicle={v}
-              onDelete={handleDelete}
+              onDelete={handleDeleteClick}
               onEdit={openEditModal}
             />
           ))}
         </div>
       )}
 
-      {/* Modal */}
+      {/* Vehicle Form Modal */}
       <VehicleFormModal
         isOpen={isModalOpen}
         onClose={closeModal}
         onSuccess={handleModalSuccess}
         vehicle={editingVehicle}
+      />
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmModal
+        open={!!deleteConfirm}
+        title="Pašalinti automobilį?"
+        message={
+          deleteConfirm?.vehicle
+            ? `Ar tikrai norite pašalinti "${deleteConfirm.vehicle.brand} ${deleteConfirm.vehicle.model}" (${deleteConfirm.vehicle.plate || 'be numerių'})? Šis veiksmas negrįžtamas.`
+            : "Ar tikrai norite pašalinti šį automobilį?"
+        }
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteConfirm(null)}
       />
     </DashboardLayout>
   );
