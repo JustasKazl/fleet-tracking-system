@@ -53,7 +53,7 @@ function DashboardLayout({ children }) {
     } else if (target === "vehicles") {
       navigate("/vehicles");
     } else if (target === "trips") {
-      navigate("/triphistory")
+      showToast("Nebaigta - netrukus bus prieinamas", "warning");
     } else if (target === "alerts") {
       showToast("Nebaigta - netrukus bus prieinamas", "warning");
     } else if (target === "reports") {
