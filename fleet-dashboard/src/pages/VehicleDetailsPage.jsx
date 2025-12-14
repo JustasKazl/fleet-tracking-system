@@ -1,8 +1,9 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import DashboardLayout from "../layout/DashboardLayout";
-import AddDocumentForm from "../components/AddDocumentForm";
 import AddServiceModal from "../components/AddServiceModal";
+import DocumentUploadModal from "../components/DocumentUploadModal";
+import OtherDocumentUploadModal from "../components/OtherDocumentUploadModal";
 import ConfirmModal from "../components/ConfirmModal";
 import MapComponent from "../components/MapComponent";
 import { useToast } from "../context/ToastContext";
@@ -22,6 +23,8 @@ function VehicleDetailsPage() {
     const [serviceRecords, setServiceRecords] = useState([]);
 
     const [showServiceModal, setShowServiceModal] = useState(false);
+    const [showDocumentUploadModal, setShowDocumentUploadModal] = useState(null); // { type: "Draudimas" } or null
+    const [showOtherDocumentModal, setShowOtherDocumentModal] = useState(false);
     const [confirmDelete, setConfirmDelete] = useState(null);
 
     // ---------------------- LOAD VEHICLE ----------------------
@@ -42,13 +45,21 @@ function VehicleDetailsPage() {
     // ---------------------- LOAD DOCUMENTS ----------------------
     async function loadDocuments() {
         if (!token) return;
-        const res = await fetch(`${API_BASE_URL}/api/vehicles/${id}/documents`, {
-            headers: {
-                "Authorization": `Bearer ${token}`,
-            },
-        });
-        setDocuments(await res.json());
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/vehicles/${id}/documents`, {
+                headers: {
+                    "Authorization": `Bearer ${token}`,
+                },
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setDocuments(data);
+            }
+        } catch (err) {
+            console.error("Error loading documents:", err);
+        }
     }
+    
     useEffect(() => { 
         if (token) loadDocuments(); 
     }, [id, token]);
@@ -56,16 +67,68 @@ function VehicleDetailsPage() {
     // ---------------------- LOAD SERVICE RECORDS ----------------------
     async function loadService() {
         if (!token) return;
-        const res = await fetch(`${API_BASE_URL}/api/vehicles/${id}/service`, {
-            headers: {
-                "Authorization": `Bearer ${token}`,
-            },
-        });
-        setServiceRecords(await res.json());
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/vehicles/${id}/service`, {
+                headers: {
+                    "Authorization": `Bearer ${token}`,
+                },
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setServiceRecords(data);
+            }
+        } catch (err) {
+            console.error("Error loading service records:", err);
+        }
     }
+    
     useEffect(() => { 
         if (token) loadService(); 
     }, [id, token]);
+
+    // ---------------------- DELETE DOCUMENT ----------------------
+    async function handleDeleteDocument(docId) {
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/documents/${docId}`, {
+                method: "DELETE",
+                headers: {
+                    "Authorization": `Bearer ${token}`,
+                },
+            });
+
+            if (res.ok) {
+                showToast("Dokumentas ištrintas", "success");
+                loadDocuments();
+            } else {
+                showToast("Nepavyko ištrinti dokumento", "error");
+            }
+        } catch (err) {
+            console.error(err);
+            showToast("Klaida trinant dokumentą", "error");
+        }
+    }
+
+    // ---------------------- DELETE SERVICE RECORD ----------------------
+    async function handleDeleteService(serviceId) {
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/service/${serviceId}`, {
+                method: "DELETE",
+                headers: {
+                    "Authorization": `Bearer ${token}`,
+                },
+            });
+
+            if (res.ok) {
+                showToast("Serviso įrašas ištrintas", "success");
+                loadService();
+            } else {
+                showToast("Nepavyko ištrinti serviso įrašo", "error");
+            }
+        } catch (err) {
+            console.error(err);
+            showToast("Klaida trinant serviso įrašą", "error");
+        }
+    }
 
     // Helper to get document expiry status
     function getDocumentStatus(validUntil) {
@@ -160,8 +223,10 @@ function VehicleDetailsPage() {
                 {/* KEY DOCUMENTS SECTION */}
                 <div className="details-section">
                     <div className="section-header">
-                        <h2 className="section-title">📄 Pagrindiniai dokumentai</h2>
-                        <p className="section-subtitle">Draudimas, techninė apžiūra ir registracija</p>
+                        <div>
+                            <h2 className="section-title">📄 Pagrindiniai dokumentai</h2>
+                            <p className="section-subtitle">Draudimas, techninė apžiūra ir registracija</p>
+                        </div>
                     </div>
 
                     <div className="key-documents-grid">
@@ -196,25 +261,31 @@ function VehicleDetailsPage() {
                                                         rel="noopener noreferrer"
                                                         className="btn-doc-view"
                                                     >
-                                                        Peržiūrėti
+                                                        👁️ Peržiūrėti
                                                     </a>
                                                     <button
                                                         className="btn-doc-delete"
                                                         onClick={() =>
                                                             setConfirmDelete({
                                                                 type: "document",
-                                                                id: doc.id
+                                                                id: doc.id,
+                                                                name: doc.title
                                                             })
                                                         }
                                                     >
-                                                        Pašalinti
+                                                        🗑️ Pašalinti
                                                     </button>
                                                 </div>
                                             </>
                                         ) : (
                                             <div className="key-doc-missing">
                                                 <span className="missing-badge">⚠️ Trūksta</span>
-                                                <p className="missing-text">Įkelkite dokumentą žemiau</p>
+                                                <button
+                                                    className="btn-upload-missing"
+                                                    onClick={() => setShowDocumentUploadModal({ type: docType })}
+                                                >
+                                                    📤 Įkelti dokumentą
+                                                </button>
                                             </div>
                                         )}
                                     </div>
@@ -227,8 +298,16 @@ function VehicleDetailsPage() {
                 {/* OTHER DOCUMENTS SECTION */}
                 <div className="details-section">
                     <div className="section-header">
-                        <h2 className="section-title">📑 Kiti dokumentai</h2>
-                        <p className="section-subtitle">Sutartys, sąskaitos ir kiti failai</p>
+                        <div>
+                            <h2 className="section-title">📑 Kiti dokumentai</h2>
+                            <p className="section-subtitle">Sutartys, sąskaitos ir kiti failai</p>
+                        </div>
+                        <button 
+                            className="btn-primary"
+                            onClick={() => setShowOtherDocumentModal(true)}
+                        >
+                            ➕ Pridėti dokumentą
+                        </button>
                     </div>
 
                     {otherDocuments.length > 0 ? (
@@ -263,18 +342,19 @@ function VehicleDetailsPage() {
                                                 rel="noopener noreferrer"
                                                 className="btn-link"
                                             >
-                                                Peržiūrėti
+                                                👁️ Peržiūrėti
                                             </a>
                                             <button
                                                 className="btn-danger-sm"
                                                 onClick={() =>
                                                     setConfirmDelete({
                                                         type: "document",
-                                                        id: doc.id
+                                                        id: doc.id,
+                                                        name: doc.title
                                                     })
                                                 }
                                             >
-                                                Pašalinti
+                                                🗑️ Pašalinti
                                             </button>
                                         </div>
                                     </div>
@@ -284,19 +364,24 @@ function VehicleDetailsPage() {
                     ) : (
                         <div className="empty-state-small">
                             <p>Nėra kitų dokumentų</p>
+                            <button 
+                                className="btn-ghost"
+                                onClick={() => setShowOtherDocumentModal(true)}
+                                style={{ marginTop: "12px" }}
+                            >
+                                ➕ Pridėti pirmą dokumentą
+                            </button>
                         </div>
                     )}
-                </div>
-
-                {/* UPLOAD DOCUMENT SECTION */}
-                <div className="details-section">
-                    <AddDocumentForm vehicleId={id} onUploaded={loadDocuments} />
                 </div>
 
                 {/* SERVICE HISTORY SECTION */}
                 <div className="details-section">
                     <div className="section-header">
-                        <h2 className="section-title">🔧 Serviso istorija</h2>
+                        <div>
+                            <h2 className="section-title">🔧 Serviso istorija</h2>
+                            <p className="section-subtitle">Techninė priežiūra ir remontas</p>
+                        </div>
                         <button className="btn-primary" onClick={() => setShowServiceModal(true)}>
                             ➕ Pridėti servisą
                         </button>
@@ -320,7 +405,10 @@ function VehicleDetailsPage() {
                                                 onClick={() =>
                                                     setConfirmDelete({
                                                         type: "service",
-                                                        id: rec.id
+                                                        id: rec.id,
+                                                        name: `${rec.service_type === "oil" ? "Tepalų keitimas" : 
+                                                               rec.service_type === "tires" ? "Padangų keitimas" :
+                                                               rec.service_type === "inspection" ? "Techninė apžiūra" : "Serviso darbas"}`
                                                     })
                                                 }
                                                 title="Pašalinti"
@@ -343,11 +431,20 @@ function VehicleDetailsPage() {
                     ) : (
                         <div className="empty-state-small">
                             <p>Nėra serviso įrašų</p>
+                            <button 
+                                className="btn-ghost"
+                                onClick={() => setShowServiceModal(true)}
+                                style={{ marginTop: "12px" }}
+                            >
+                                ➕ Pridėti pirmą įrašą
+                            </button>
                         </div>
                     )}
                 </div>
 
-                {/* SERVICE MODAL */}
+                {/* MODALS */}
+                
+                {/* Service Modal */}
                 {showServiceModal && (
                     <AddServiceModal
                         vehicleId={id}
@@ -356,37 +453,42 @@ function VehicleDetailsPage() {
                     />
                 )}
 
-                {/* CONFIRM DELETE MODAL */}
+                {/* Key Document Upload Modal */}
+                {showDocumentUploadModal && (
+                    <DocumentUploadModal
+                        vehicleId={id}
+                        documentType={showDocumentUploadModal.type}
+                        onClose={() => setShowDocumentUploadModal(null)}
+                        onSuccess={loadDocuments}
+                    />
+                )}
+
+                {/* Other Document Upload Modal */}
+                {showOtherDocumentModal && (
+                    <OtherDocumentUploadModal
+                        vehicleId={id}
+                        onClose={() => setShowOtherDocumentModal(false)}
+                        onSuccess={loadDocuments}
+                    />
+                )}
+
+                {/* Confirm Delete Modal */}
                 {confirmDelete && (
                     <ConfirmModal
                         open={true}
                         title="Ar tikrai norite ištrinti?"
                         message={
                             confirmDelete.type === "document"
-                                ? "Šis dokumentas bus visam laikui pašalintas."
-                                : "Serviso įrašas bus negrįžtamai ištrintas."
+                                ? `Dokumentas "${confirmDelete.name}" bus visam laikui pašalintas.`
+                                : `Serviso įrašas "${confirmDelete.name}" bus negrįžtamai ištrintas.`
                         }
                         onCancel={() => setConfirmDelete(null)}
                         onConfirm={async () => {
                             if (confirmDelete.type === "document") {
-                                await fetch(`${API_BASE_URL}/api/documents/${confirmDelete.id}`, {
-                                    method: "DELETE",
-                                    headers: {
-                                        "Authorization": `Bearer ${token}`,
-                                    },
-                                });
-                                loadDocuments();
+                                await handleDeleteDocument(confirmDelete.id);
                             } else {
-                                await fetch(`${API_BASE_URL}/api/service/${confirmDelete.id}`, {
-                                    method: "DELETE",
-                                    headers: {
-                                        "Authorization": `Bearer ${token}`,
-                                    },
-                                });
-                                loadService();
+                                await handleDeleteService(confirmDelete.id);
                             }
-
-                            showToast("Sėkmingai ištrinta", "success");
                             setConfirmDelete(null);
                         }}
                     />
