@@ -13,8 +13,7 @@ function VehicleFormModal({ isOpen, onClose, onSuccess, vehicle = null }) {
   const [model, setModel] = useState("");
   const [customName, setCustomName] = useState("");
   const [plate, setPlate] = useState("");
-  const [fmbSerial, setFmbSerial] = useState("");
-  const [vin, setVin] = useState("");
+  const [imei, setImei] = useState("");
   const [odo, setOdo] = useState(0);
   const [loading, setLoading] = useState(false);
 
@@ -25,8 +24,7 @@ function VehicleFormModal({ isOpen, onClose, onSuccess, vehicle = null }) {
       setModel(vehicle.model || "");
       setCustomName(vehicle.custom_name || "");
       setPlate(vehicle.plate || "");
-      setFmbSerial(vehicle.fmb_serial || "");
-      setVin(vehicle.vin || "");
+      setImei(vehicle.imei || "");
       setOdo(vehicle.total_km || 0);
     } else {
       // Reset form for add mode
@@ -34,8 +32,7 @@ function VehicleFormModal({ isOpen, onClose, onSuccess, vehicle = null }) {
       setModel("");
       setCustomName("");
       setPlate("");
-      setFmbSerial("");
-      setVin("");
+      setImei("");
       setOdo(0);
     }
   }, [vehicle, isEditMode, isOpen]);
@@ -43,8 +40,15 @@ function VehicleFormModal({ isOpen, onClose, onSuccess, vehicle = null }) {
   async function handleSubmit(e) {
     e.preventDefault();
 
-    if (!brand || !model || !fmbSerial) {
-      showToast("Užpildykite privalomus laukus (markė, modelis, FMB serija)", "error");
+    // Validate required fields
+    if (!brand || !model || !imei) {
+      showToast("Užpildykite privalomus laukus (markė, modelis, IMEI)", "error");
+      return;
+    }
+
+    // Validate IMEI format (15 digits)
+    if (!/^\d{15}$/.test(imei)) {
+      showToast("IMEI turi būti 15 skaitmenų", "error");
       return;
     }
 
@@ -55,10 +59,7 @@ function VehicleFormModal({ isOpen, onClose, onSuccess, vehicle = null }) {
       model,
       custom_name: customName,
       plate,
-      fmb_serial: fmbSerial,
-      imei: fmbSerial,
-      device_id: fmbSerial,
-      vin: vin || "",
+      imei,
       total_km: odo,
       status: "offline"
     };
@@ -79,7 +80,10 @@ function VehicleFormModal({ isOpen, onClose, onSuccess, vehicle = null }) {
         body: JSON.stringify(payload),
       });
 
-      if (!res.ok) throw new Error("Failed");
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed");
+      }
 
       showToast(
         isEditMode
@@ -93,9 +97,11 @@ function VehicleFormModal({ isOpen, onClose, onSuccess, vehicle = null }) {
     } catch (err) {
       console.error(err);
       showToast(
-        isEditMode
-          ? "Nepavyko atnaujinti automobilio"
-          : "Nepavyko pridėti automobilio",
+        err.message === "IMEI already registered to another vehicle"
+          ? "Šis IMEI jau registruotas kitam automobiliui"
+          : isEditMode
+            ? "Nepavyko atnaujinti automobilio"
+            : "Nepavyko pridėti automobilio",
         "error"
       );
     } finally {
@@ -122,16 +128,29 @@ function VehicleFormModal({ isOpen, onClose, onSuccess, vehicle = null }) {
         </div>
 
         <form onSubmit={handleSubmit} className="modal-form">
-          {/* VIN Code */}
+          {/* IMEI - Required Field */}
           <div className="form-field">
-            <label>VIN kodas (nebūtina)</label>
+            <label>IMEI numeris *</label>
             <input
               type="text"
-              value={vin}
-              onChange={(e) => setVin(e.target.value.toUpperCase())}
-              placeholder="Pvz: WBA3A5G50GW123456"
-              maxLength="17"
+              value={imei}
+              onChange={(e) => setImei(e.target.value.replace(/\D/g, ''))} // Only digits
+              placeholder="860123456789012 (15 skaitmenų)"
+              maxLength="15"
+              required
+              disabled={isEditMode}
+              style={isEditMode ? { opacity: 0.6, cursor: 'not-allowed' } : {}}
             />
+            {isEditMode && (
+              <div style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "4px" }}>
+                ⚠️ IMEI negalima keisti po sukūrimo
+              </div>
+            )}
+            {!isEditMode && (
+              <div style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "4px" }}>
+                💡 Teltonika FMB įrenginio IMEI numeris (15 skaitmenų)
+              </div>
+            )}
           </div>
 
           {/* Brand & Model Row */}
@@ -193,35 +212,16 @@ function VehicleFormModal({ isOpen, onClose, onSuccess, vehicle = null }) {
             </div>
           </div>
 
-          {/* FMB Serial & Mileage Row */}
-          <div className="form-row">
-            <div className="form-field">
-              <label>FMB003 serija *</label>
-              <input
-                type="text"
-                value={fmbSerial}
-                onChange={(e) => setFmbSerial(e.target.value)}
-                placeholder="Pvz: FMB130-001234"
-                required
-                disabled={isEditMode}
-                style={isEditMode ? { opacity: 0.6 } : {}}
-              />
-              {isEditMode && (
-                <div style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "4px" }}>
-                  Negalima keisti redagavimo metu
-                </div>
-              )}
-            </div>
-
-            <div className="form-field">
-              <label>Rida (km)</label>
-              <input
-                type="number"
-                value={odo}
-                onChange={(e) => setOdo(Number(e.target.value))}
-                min="0"
-              />
-            </div>
+          {/* Mileage */}
+          <div className="form-field">
+            <label>Rida (km)</label>
+            <input
+              type="number"
+              value={odo}
+              onChange={(e) => setOdo(Number(e.target.value))}
+              min="0"
+              placeholder="0"
+            />
           </div>
 
           {/* Form Actions */}
