@@ -105,35 +105,37 @@ function VehiclesPage() {
 
   return (
     <DashboardLayout>
-      {/* Header Section - ORIGINAL STYLE */}
+      {/* Header Section - Redesigned Layout */}
       <div className="vehicles-header">
         <div className="vehicles-title-block">
           <h1 className="vehicles-page-title">Automobiliai</h1>
           <p className="vehicles-page-sub">Valdykite savo automobilių parką</p>
         </div>
+        
+        {/* Search Bar - Middle */}
+        <div className="vehicles-search-bar">
+          <input
+            type="text"
+            className="search-input"
+            placeholder="🔍 Ieškoti pagal markę, modelį, pavadinimą, numerius arba IMEI..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+          {searchQuery && (
+            <button
+              className="search-clear-btn"
+              onClick={() => setSearchQuery("")}
+              title="Išvalyti paiešką"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+
+        {/* Add Button - Right */}
         <button className="btn-primary" onClick={openAddModal}>
           ➕ Pridėti automobilį
         </button>
-      </div>
-
-      {/* Search Bar - ADDED */}
-      <div className="vehicles-search-bar">
-        <input
-          type="text"
-          className="search-input"
-          placeholder="🔍 Ieškoti pagal markę, modelį, pavadinimą, numerius arba IMEI..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-        />
-        {searchQuery && (
-          <button
-            className="search-clear-btn"
-            onClick={() => setSearchQuery("")}
-            title="Išvalyti paiešką"
-          >
-            ✕
-          </button>
-        )}
       </div>
 
       {/* Search Results Info */}
