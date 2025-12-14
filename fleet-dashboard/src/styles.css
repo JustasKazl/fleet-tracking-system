@@ -2316,3 +2316,377 @@ body {
     flex: 1;
   }
 }
+/* ═══════════════════════════════════════════════════════════════
+   MAP COMPONENT - BEAUTIFUL DESIGN WITH CAR ICON
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ─────── MAP WRAPPER ─────── */
+.map-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  background: linear-gradient(135deg, rgba(26, 15, 46, 0.8) 0%, rgba(20, 8, 36, 0.6) 100%);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+/* ─────── MAP HEADER ─────── */
+.map-header {
+  padding: 20px 24px;
+  background: rgba(10, 1, 24, 0.4);
+  border-bottom: 1px solid var(--border-light);
+}
+
+.map-title-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.map-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.map-refreshing {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--accent);
+  opacity: 0.8;
+  animation: pulse 2s infinite;
+}
+
+.map-coords {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.coord {
+  font-size: 12px;
+  font-family: 'Monaco', 'Courier New', monospace;
+  color: var(--text-muted);
+  background: rgba(102, 126, 234, 0.1);
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(102, 126, 234, 0.2);
+}
+
+.speed-badge {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--good);
+  background: rgba(59, 242, 140, 0.15);
+  padding: 4px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(59, 242, 140, 0.3);
+}
+
+/* ─────── MAP CONTAINER ─────── */
+.map-container {
+  height: 450px;
+  position: relative;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.03) 100%);
+}
+
+/* ─────── LOADING STATE ─────── */
+.map-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  background: linear-gradient(135deg, rgba(26, 15, 46, 0.95) 0%, rgba(20, 8, 36, 0.9) 100%);
+  backdrop-filter: blur(10px);
+  z-index: 1000;
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid rgba(102, 126, 234, 0.2);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.map-loading p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+/* ─────── ERROR STATE ─────── */
+.map-error {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 40px;
+  text-align: center;
+  background: linear-gradient(135deg, rgba(242, 68, 68, 0.05) 0%, rgba(26, 15, 46, 0.95) 100%);
+}
+
+.error-icon {
+  font-size: 48px;
+  opacity: 0.5;
+}
+
+.map-error p {
+  margin: 0;
+  color: var(--bad);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.map-error small {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+/* ─────── MAP INFO BAR ─────── */
+.map-info-bar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1px;
+  background: var(--border-light);
+  border-top: 1px solid var(--border-light);
+}
+
+.map-info-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  background: rgba(10, 1, 24, 0.3);
+  transition: all 0.2s;
+}
+
+.map-info-item:hover {
+  background: rgba(102, 126, 234, 0.08);
+}
+
+.info-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.info-details {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.info-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.info-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-main);
+  font-family: 'Monaco', 'Courier New', monospace;
+}
+
+/* ─────── CAR MARKER ICON ─────── */
+.car-marker-icon {
+  background: transparent !important;
+  border: none !important;
+}
+
+/* ─────── LEAFLET POPUP STYLING ─────── */
+.leaflet-popup-content-wrapper {
+  background: linear-gradient(135deg, rgba(26, 15, 46, 0.98) 0%, rgba(20, 8, 36, 0.95) 100%) !important;
+  border: 1px solid rgba(102, 126, 234, 0.3) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6) !important;
+  backdrop-filter: blur(10px) !important;
+  padding: 0 !important;
+}
+
+.leaflet-popup-content {
+  margin: 0 !important;
+  min-width: 240px !important;
+}
+
+.leaflet-popup-tip {
+  background: rgba(26, 15, 46, 0.98) !important;
+  border: 1px solid rgba(102, 126, 234, 0.3) !important;
+  border-top: none !important;
+  border-right: none !important;
+}
+
+.map-popup {
+  padding: 16px;
+  color: var(--text-main);
+}
+
+.popup-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(102, 126, 234, 0.2);
+}
+
+.popup-icon {
+  font-size: 20px;
+}
+
+.popup-header strong {
+  font-size: 14px;
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--accent), var(--accent-alt));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.popup-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.popup-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+}
+
+.popup-label {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.popup-value {
+  color: var(--text-main);
+  font-weight: 600;
+  font-family: 'Monaco', 'Courier New', monospace;
+}
+
+.popup-timestamp {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(102, 126, 234, 0.2);
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* ─────── LEAFLET CONTROLS ─────── */
+.leaflet-control-zoom {
+  border: 1px solid rgba(102, 126, 234, 0.3) !important;
+  border-radius: 8px !important;
+  overflow: hidden !important;
+}
+
+.leaflet-control-zoom a {
+  background: rgba(26, 15, 46, 0.9) !important;
+  color: var(--text-main) !important;
+  border: none !important;
+  border-bottom: 1px solid rgba(102, 126, 234, 0.2) !important;
+  width: 36px !important;
+  height: 36px !important;
+  line-height: 36px !important;
+  font-size: 18px !important;
+  font-weight: 700 !important;
+  transition: all 0.2s !important;
+}
+
+.leaflet-control-zoom a:last-child {
+  border-bottom: none !important;
+}
+
+.leaflet-control-zoom a:hover {
+  background: rgba(102, 126, 234, 0.2) !important;
+  color: var(--accent) !important;
+}
+
+.leaflet-control-attribution {
+  background: rgba(26, 15, 46, 0.9) !important;
+  color: var(--text-muted) !important;
+  font-size: 10px !important;
+  border-radius: 4px !important;
+  padding: 4px 8px !important;
+  border: 1px solid rgba(102, 126, 234, 0.2) !important;
+}
+
+.leaflet-control-attribution a {
+  color: var(--accent) !important;
+}
+
+/* ─────── ANIMATIONS ─────── */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* ─────── RESPONSIVE ─────── */
+@media (max-width: 768px) {
+  .map-container {
+    height: 350px;
+  }
+
+  .map-info-bar {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .map-header {
+    padding: 16px 20px;
+  }
+
+  .map-coords {
+    gap: 8px;
+  }
+
+  .coord {
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 480px) {
+  .map-container {
+    height: 300px;
+  }
+
+  .map-info-bar {
+    grid-template-columns: 1fr;
+  }
+
+  .info-icon {
+    font-size: 18px;
+  }
+
+  .popup-content {
+    font-size: 11px;
+  }
+}
