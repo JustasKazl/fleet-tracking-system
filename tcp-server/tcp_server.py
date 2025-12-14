@@ -1,18 +1,174 @@
 #!/usr/bin/env python3
 """
-ULTRA SIMPLE TCP Server - Always ACK everything
-For FMB003 testing - no validation, just accept everything
+TCP Server for FMB003 GPS Tracker
+- Validates IMEI against vehicle table
+- Parses AVL data packets
+- Stores telemetry in database
 """
 import os
 import socket
 import threading
+import struct
+from datetime import datetime
+import psycopg
 
+# Configuration
 TCP_PORT = int(os.environ.get('TCP_PORT', 5055))
+DATABASE_URL = os.environ.get('DATABASE_URL')
+
+def get_db_connection():
+    """Create a new database connection"""
+    if not DATABASE_URL:
+        raise ValueError("DATABASE_URL environment variable not set")
+    return psycopg.connect(DATABASE_URL)
+
+def validate_imei(imei):
+    """Check if IMEI exists in vehicle table and return vehicle_id"""
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT id FROM vehicles WHERE imei = %s",
+                    (imei,)
+                )
+                result = cur.fetchone()
+                if result:
+                    return result[0]  # Return vehicle_id
+                return None
+    except Exception as e:
+        print(f"❌ Database error validating IMEI: {e}")
+        return None
+
+def parse_avl_record(data, offset):
+    """
+    Parse a single AVL record from FMB003
+    Returns: (parsed_data_dict, bytes_consumed)
+    """
+    try:
+        start_offset = offset
+        
+        # Timestamp (8 bytes) - milliseconds since Unix epoch
+        timestamp_ms = struct.unpack('>Q', data[offset:offset+8])[0]
+        offset += 8
+        timestamp = datetime.fromtimestamp(timestamp_ms / 1000.0)
+        
+        # Priority (1 byte)
+        priority = data[offset]
+        offset += 1
+        
+        # GPS Data
+        longitude = struct.unpack('>i', data[offset:offset+4])[0] / 10000000.0
+        offset += 4
+        
+        latitude = struct.unpack('>i', data[offset:offset+4])[0] / 10000000.0
+        offset += 4
+        
+        altitude = struct.unpack('>h', data[offset:offset+2])[0]
+        offset += 2
+        
+        angle = struct.unpack('>H', data[offset:offset+2])[0]
+        offset += 2
+        
+        satellites = data[offset]
+        offset += 1
+        
+        speed = struct.unpack('>H', data[offset:offset+2])[0]
+        offset += 2
+        
+        # IO Elements
+        event_io_id = data[offset]
+        offset += 1
+        
+        total_io = data[offset]
+        offset += 1
+        
+        # Skip IO elements for now (we can parse these later if needed)
+        # 1-byte IO elements
+        if offset < len(data):
+            n1 = data[offset]
+            offset += 1
+            offset += n1 * 2  # Each element is 1 byte ID + 1 byte value
+        
+        # 2-byte IO elements
+        if offset < len(data):
+            n2 = data[offset]
+            offset += 1
+            offset += n2 * 3  # Each element is 1 byte ID + 2 byte value
+        
+        # 4-byte IO elements
+        if offset < len(data):
+            n4 = data[offset]
+            offset += 1
+            offset += n4 * 5  # Each element is 1 byte ID + 4 byte value
+        
+        # 8-byte IO elements
+        if offset < len(data):
+            n8 = data[offset]
+            offset += 1
+            offset += n8 * 9  # Each element is 1 byte ID + 8 byte value
+        
+        bytes_consumed = offset - start_offset
+        
+        return {
+            'timestamp': timestamp,
+            'latitude': latitude,
+            'longitude': longitude,
+            'altitude': altitude,
+            'speed': speed,
+            'angle': angle,
+            'satellites': satellites,
+            'priority': priority,
+            'event_io_id': event_io_id
+        }, bytes_consumed
+        
+    except Exception as e:
+        print(f"❌ Error parsing AVL record: {e}")
+        return None, 0
+
+def store_telemetry(vehicle_id, telemetry_data):
+    """Store telemetry data in database"""
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO telemetry (
+                        vehicle_id,
+                        timestamp,
+                        latitude,
+                        longitude,
+                        altitude,
+                        speed,
+                        angle,
+                        satellites,
+                        priority,
+                        event_io_id,
+                        created_at
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                """, (
+                    vehicle_id,
+                    telemetry_data['timestamp'],
+                    telemetry_data['latitude'],
+                    telemetry_data['longitude'],
+                    telemetry_data['altitude'],
+                    telemetry_data['speed'],
+                    telemetry_data['angle'],
+                    telemetry_data['satellites'],
+                    telemetry_data['priority'],
+                    telemetry_data['event_io_id']
+                ))
+                conn.commit()
+                return True
+    except Exception as e:
+        print(f"❌ Database error storing telemetry: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
 
 def handle_client(client_socket, addr):
     print(f"🔌 Device connected: {addr}")
     
     imei = None
+    vehicle_id = None
     buffer = b''
     
     try:
@@ -34,14 +190,25 @@ def handle_client(client_socket, addr):
                         imei = buffer[2:2+imei_len].decode('utf-8')
                         print(f"📱 IMEI: {imei}")
                         
-                        buffer = buffer[2+imei_len:]
-                        client_socket.send(b'\x01')
-                        print(f"✅ Sent IMEI ACK")
+                        # Validate IMEI against database
+                        vehicle_id = validate_imei(imei)
+                        
+                        if vehicle_id:
+                            print(f"✅ IMEI validated - Vehicle ID: {vehicle_id}")
+                            buffer = buffer[2+imei_len:]
+                            client_socket.send(b'\x01')
+                            print(f"✅ Sent IMEI ACK")
+                        else:
+                            print(f"❌ IMEI not found in database: {imei}")
+                            client_socket.send(b'\x00')
+                            print(f"❌ Sent IMEI REJECT")
+                            client_socket.close()
+                            return
                         continue
             
-            # PHASE 2: Just ACK everything
+            # PHASE 2: Parse and store AVL data
             while len(buffer) >= 12:
-                # Check for preamble
+                # Check for preamble (4 zero bytes)
                 preamble = int.from_bytes(buffer[0:4], 'big')
                 if preamble != 0:
                     buffer = buffer[1:]
@@ -51,7 +218,7 @@ def handle_client(client_socket, addr):
                 data_length = int.from_bytes(buffer[4:8], 'big')
                 total_packet_size = 8 + data_length + 4
                 
-                print(f"📦 Packet size: {total_packet_size} bytes")
+                print(f"📦 Packet size: {total_packet_size} bytes (data: {data_length})")
                 
                 if len(buffer) < total_packet_size:
                     print(f"⏳ Waiting for more data...")
@@ -60,23 +227,52 @@ def handle_client(client_socket, addr):
                 # Extract packet
                 packet = buffer[:total_packet_size]
                 
-                # Get number of records (byte 9)
-                if len(packet) > 9:
-                    num_records = packet[9]
-                    print(f"📊 Records in packet: {num_records}")
+                # Parse AVL data
+                codec_id = packet[8]
+                num_records = packet[9]
+                
+                print(f"📊 Codec ID: {codec_id}, Records: {num_records}")
+                
+                if codec_id == 0x08:  # Codec 8
+                    offset = 10  # Start after codec_id and num_records
+                    records_stored = 0
                     
-                    # ALWAYS SEND ACK
+                    for i in range(num_records):
+                        telemetry_data, bytes_consumed = parse_avl_record(packet, offset)
+                        
+                        if telemetry_data:
+                            print(f"📍 Record {i+1}: Lat={telemetry_data['latitude']:.6f}, "
+                                  f"Lon={telemetry_data['longitude']:.6f}, "
+                                  f"Speed={telemetry_data['speed']} km/h, "
+                                  f"Sats={telemetry_data['satellites']}")
+                            
+                            # Store in database
+                            if store_telemetry(vehicle_id, telemetry_data):
+                                records_stored += 1
+                                print(f"💾 Stored record {i+1} to database")
+                            else:
+                                print(f"❌ Failed to store record {i+1}")
+                            
+                            offset += bytes_consumed
+                        else:
+                            print(f"❌ Failed to parse record {i+1}")
+                            break
+                    
+                    print(f"✅ Successfully stored {records_stored}/{num_records} records")
+                    
+                    # Send ACK with number of records accepted
                     ack = num_records.to_bytes(4, 'big')
                     client_socket.sendall(ack)
                     print(f"✅ Sent ACK: {num_records} records")
                 else:
-                    # Send ACK for 1 record if we can't parse
-                    ack = b'\x00\x00\x00\x01'
+                    print(f"⚠️ Unsupported codec: {codec_id}")
+                    # Still send ACK
+                    ack = num_records.to_bytes(4, 'big')
                     client_socket.sendall(ack)
-                    print(f"✅ Sent ACK: 1 record (default)")
+                    print(f"✅ Sent ACK: {num_records} records (unsupported codec)")
                 
                 buffer = buffer[total_packet_size:]
-                print(f"🔄 Buffer remaining: {len(buffer)} bytes")
+                print(f"🔄 Buffer remaining: {len(buffer)} bytes\n")
     
     except Exception as e:
         print(f"❌ Error: {e}")
@@ -87,12 +283,20 @@ def handle_client(client_socket, addr):
         print(f"❌ Disconnected: {addr}")
 
 def run_server():
+    # Test database connection
+    try:
+        with get_db_connection() as conn:
+            print("✅ Database connection successful")
+    except Exception as e:
+        print(f"❌ Database connection failed: {e}")
+        print("⚠️  Server will start but data won't be stored")
+    
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     server.bind(('0.0.0.0', TCP_PORT))
     server.listen(5)
-    print(f"🚀 SIMPLE TCP server listening on 0.0.0.0:{TCP_PORT}")
-    print(f"📢 THIS SERVER ACCEPTS ALL DEVICES AND ALWAYS SENDS ACK")
+    print(f"🚀 TCP server listening on 0.0.0.0:{TCP_PORT}")
+    print(f"📢 Validating IMEIs and storing telemetry to database")
     
     try:
         while True:
@@ -107,9 +311,9 @@ def run_server():
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("🚀 ULTRA SIMPLE TCP SERVER - ACCEPT EVERYTHING")
+    print("🚀 FMB003 TCP SERVER WITH DATABASE STORAGE")
     print("=" * 60)
     print(f"📡 Port: {TCP_PORT}")
-    print("⚠️  NO DATABASE - JUST TESTING ACK")
+    print(f"🗄️  Database: {'Configured' if DATABASE_URL else 'NOT CONFIGURED'}")
     print("=" * 60)
     run_server()
