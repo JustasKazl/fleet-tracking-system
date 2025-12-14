@@ -178,13 +178,19 @@ def store_telemetry(imei, records):
         
         print(f"🔍 Database query result: {result}")
         
+        # 🚨 TEMPORARY: ACCEPT ALL DEVICES FOR TESTING 🚨
         if not result:
-            # Unauthorized/unknown device
+            # Log unknown device but STILL ACCEPT IT
             log_unknown_device(imei, None, records)
-            print(f"❌ REJECTED: Unauthorized device IMEI: {imei}")
+            print(f"⚠️  WARNING: Unknown device IMEI: {imei} - but accepting anyway for testing")
+            print(f"⚠️  GPS data received but NOT stored (no vehicle_id)")
+            print(f"⚠️  Records: {len(records)} location points")
+            for i, rec in enumerate(records[:3]):  # Show first 3 records
+                print(f"   📍 Record {i+1}: Lat={rec['latitude']:.6f}, Lon={rec['longitude']:.6f}, Speed={rec['speed']} km/h")
             cur.close()
             conn.close()
-            return False
+            # RETURN TRUE TO SEND ACK ANYWAY! 
+            return True
         
         vehicle_id = result[0]
         vin = result[1]
