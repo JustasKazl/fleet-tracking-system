@@ -163,46 +163,24 @@ def extract_obd(io):
 # ================= AVL PARSING =================
 
 def parse_avl(buf, offset):
-    ts = struct.unpack('>Q', buf[offset:offset+8])[0]
+    buf_len = len(buf)
+
+    # 1. Check if we can read timestamp + priority + GPS (minimum 26 bytes)
+    if offset + 26 > buf_len:
+        return None, offset
+
+    ts_raw = buf[offset:offset+8]
+    ts = struct.unpack('>Q', ts_raw)[0]
     offset += 8
 
-    priority = buf[offset]
-    offset += 1
+    # Validate timestamp (ms since epoch)
+    ts_seconds = ts / 1000
+    if ts_seconds < 946684800 or ts_seconds > 4102444800:
+        # < 2000-01-01 or > 2100-01-01 → invalid
+        return None, offset
 
-    lon = struct.unpack('>i', buf[offset:offset+4])[0] / 1e7
-    offset += 4
-    lat = struct.unpack('>i', buf[offset:offset+4])[0] / 1e7
-    offset += 4
+    timestamp = datetime.utcfromtimestamp(ts_seconds)
 
-    alt = struct.unpack('>h', buf[offset:offset+2])[0]
-    offset += 2
-    angle = struct.unpack('>H', buf[offset:offset+2])[0]
-    offset += 2
-    sats = buf[offset]
-    offset += 1
-    speed = struct.unpack('>H', buf[offset:offset+2])[0]
-    offset += 2
-
-    event_io = buf[offset]
-    offset += 1
-
-    total_io = buf[offset]
-    offset += 1
-
-    io, offset = parse_io_elements(buf, offset)
-    obd = extract_obd(io)
-
-    return {
-        'timestamp': datetime.utcfromtimestamp(ts / 1000),
-        'latitude': lat,
-        'longitude': lon,
-        'altitude': alt,
-        'angle': angle,
-        'speed': speed,
-        'satellites': sats,
-        'priority': priority,
-        'obd': obd
-    }, offset
 
 # ================= STORAGE =================
 
@@ -270,8 +248,10 @@ def handle_client(sock, addr):
             offset = 10
 
             for _ in range(count):
-                data, offset = parse_avl(packet, offset)
-                store(vehicle_id, data)
+                parsed, offset = parse_avl(packet, offset)
+                if parsed is None:
+                    continue
+                store(vehicle_id, parsed)
 
             sock.sendall(count.to_bytes(4, 'big'))
             buffer = buffer[8 + size + 4:]
