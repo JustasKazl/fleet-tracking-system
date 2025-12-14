@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import DashboardLayout from "../layout/DashboardLayout";
 import VehicleCard from "../components/VehicleCard";
 import VehicleFormModal from "../components/VehicleFormModal";
@@ -8,12 +7,12 @@ import { useAuth } from "../context/AuthContext";
 import API_BASE_URL from "../api";
 
 function VehiclesPage() {
-  const navigate = useNavigate();
   const { showToast } = useToast();
   const { token } = useAuth();
 
   const [vehicles, setVehicles] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
   
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -88,42 +87,97 @@ function VehiclesPage() {
     closeModal();
   }
 
+  // Filter vehicles based on search query
+  const filteredVehicles = vehicles.filter((vehicle) => {
+    if (!searchQuery) return true;
+    
+    const query = searchQuery.toLowerCase();
+    const searchFields = [
+      vehicle.brand?.toLowerCase() || "",
+      vehicle.model?.toLowerCase() || "",
+      vehicle.custom_name?.toLowerCase() || "",
+      vehicle.plate?.toLowerCase() || "",
+      vehicle.imei?.toLowerCase() || "",
+    ];
+    
+    return searchFields.some(field => field.includes(query));
+  });
+
   return (
     <DashboardLayout>
+      {/* Header Section - ORIGINAL STYLE */}
       <div className="vehicles-header">
-        <div>
+        <div className="vehicles-title-block">
           <h1 className="vehicles-page-title">Automobiliai</h1>
-          <p className="vehicles-page-sub">
-            Valdykite savo automobilių parką
-          </p>
+          <p className="vehicles-page-sub">Valdykite savo automobilių parką</p>
         </div>
-        <button
-          className="btn-primary"
-          onClick={openAddModal}
-        >
+        <button className="btn-primary" onClick={openAddModal}>
           ➕ Pridėti automobilį
         </button>
       </div>
 
+      {/* Search Bar - ADDED */}
+      <div className="vehicles-search-bar">
+        <input
+          type="text"
+          className="search-input"
+          placeholder="🔍 Ieškoti pagal markę, modelį, pavadinimą, numerius arba IMEI..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+        />
+        {searchQuery && (
+          <button
+            className="search-clear-btn"
+            onClick={() => setSearchQuery("")}
+            title="Išvalyti paiešką"
+          >
+            ✕
+          </button>
+        )}
+      </div>
+
+      {/* Search Results Info */}
+      {searchQuery && (
+        <div className="search-results-info">
+          Rasta <strong>{filteredVehicles.length}</strong> iš <strong>{vehicles.length}</strong> automobilių
+        </div>
+      )}
+
+      {/* Loading State */}
       {loading ? (
         <div className="loading-message">Kraunama...</div>
-      ) : vehicles.length === 0 ? (
-        <div className="empty-state">
-          <div className="empty-state-icon">🚗</div>
-          <h2 className="empty-state-title">Nėra automobilių</h2>
-          <p className="empty-state-text">
-            Pradėkite pridėdami pirmą automobilį į savo parką
-          </p>
-          <button
-            className="btn-primary"
-            onClick={openAddModal}
-          >
-            ➕ Pridėti automobilį
-          </button>
-        </div>
+      ) : filteredVehicles.length === 0 ? (
+        // Empty State
+        searchQuery ? (
+          <div className="empty-state">
+            <div className="empty-state-icon">🔍</div>
+            <h2 className="empty-state-title">Nieko nerasta</h2>
+            <p className="empty-state-text">
+              Bandykite pakeisti paieškos kriterijus
+            </p>
+            <button
+              className="btn-ghost"
+              onClick={() => setSearchQuery("")}
+            >
+              Išvalyti paiešką
+            </button>
+          </div>
+        ) : (
+          <div className="empty-state">
+            <div className="empty-state-icon">🚗</div>
+            <h2 className="empty-state-title">Nėra automobilių</h2>
+            <p className="empty-state-text">
+              Pradėkite pridėdami pirmą automobilį į savo parką
+            </p>
+            <button className="btn-primary" onClick={openAddModal}>
+              ➕ Pridėti automobilį
+            </button>
+          </div>
+        )
       ) : (
+        // Vehicle Cards Grid - ORIGINAL STYLE
         <div className="vehicles-grid">
-          {vehicles.map((v) => (
+          {filteredVehicles.map((v) => (
             <VehicleCard
               key={v.id}
               vehicle={v}
@@ -134,6 +188,7 @@ function VehiclesPage() {
         </div>
       )}
 
+      {/* Modal */}
       <VehicleFormModal
         isOpen={isModalOpen}
         onClose={closeModal}
