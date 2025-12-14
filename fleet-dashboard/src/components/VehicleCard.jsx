@@ -1,4 +1,6 @@
 import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import geocoding from "../utils/geocoding";
 
 function VehicleCard({ vehicle, onDelete, onEdit }) {
   const {
@@ -11,10 +13,13 @@ function VehicleCard({ vehicle, onDelete, onEdit }) {
     status,
     total_km,
     created_at,
-    last_seen,        // From telemetry JOIN
-    last_latitude,    // From telemetry JOIN
-    last_longitude,   // From telemetry JOIN
+    last_seen,
+    last_latitude,
+    last_longitude,
   } = vehicle;
+
+  const [locationName, setLocationName] = useState(null);
+  const [loadingLocation, setLoadingLocation] = useState(false);
 
   const statusLabel =
     status === "online"
@@ -37,7 +42,28 @@ function VehicleCard({ vehicle, onDelete, onEdit }) {
   const avatarLetter = brand?.[0]?.toUpperCase() || "?";
   const navigate = useNavigate();
 
-  // Helper function to format the date nicely
+  // Fetch location name using shared geocoding utility
+  useEffect(() => {
+    if (last_latitude && last_longitude) {
+      setLoadingLocation(true);
+      
+      geocoding.getLocationName(last_latitude, last_longitude)
+        .then(location => {
+          setLocationName(location);
+        })
+        .catch(error => {
+          console.error("Failed to get location:", error);
+          setLocationName("Nežinoma vieta");
+        })
+        .finally(() => {
+          setLoadingLocation(false);
+        });
+    } else {
+      setLocationName("Nėra duomenų");
+    }
+  }, [last_latitude, last_longitude]);
+
+  // Helper functions
   const formatDate = (dateString) => {
     if (!dateString) return "-";
     try {
@@ -47,7 +73,6 @@ function VehicleCard({ vehicle, onDelete, onEdit }) {
     }
   };
 
-  // Helper to format last seen time
   const formatLastSeen = (timestamp) => {
     if (!timestamp) return "Niekada";
     try {
@@ -69,13 +94,25 @@ function VehicleCard({ vehicle, onDelete, onEdit }) {
     }
   };
 
-  // Format IMEI for display (show last 6 digits for privacy)
   const formatImei = (imei) => {
     if (!imei) return "-";
     if (imei.length === 15) {
       return `•••••••••${imei.slice(-6)}`;
     }
     return imei;
+  };
+
+  const getLocationDisplay = () => {
+    if (loadingLocation) {
+      return "🔄 Kraunama...";
+    }
+    if (!last_latitude || !last_longitude) {
+      return "Nėra duomenų";
+    }
+    if (locationName) {
+      return `📍 ${locationName}`;
+    }
+    return "Nežinoma vieta";
   };
 
   return (
@@ -111,15 +148,19 @@ function VehicleCard({ vehicle, onDelete, onEdit }) {
 
         <div className="vehicle-meta-item">
           <div className="vehicle-meta-label">Paskutinė vietovė</div>
-          <div className="vehicle-meta-value">
-            {formatLastSeen(last_seen)}
+          <div 
+            className="vehicle-meta-value" 
+            style={{ fontSize: '11px' }}
+            title={last_latitude && last_longitude ? `${last_latitude.toFixed(6)}°, ${last_longitude.toFixed(6)}°` : ''}
+          >
+            {getLocationDisplay()}
           </div>
         </div>
 
         <div className="vehicle-meta-item">
-          <div className="vehicle-meta-label">Pridėtas</div>
+          <div className="vehicle-meta-label">Paskutinis ryšys</div>
           <div className="vehicle-meta-value">
-            {formatDate(created_at)}
+            {formatLastSeen(last_seen)}
           </div>
         </div>
       </div>
