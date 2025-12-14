@@ -1269,7 +1269,7 @@ body {
 
 .row-main {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 14px;
   flex-grow: 1;
   min-height: 0;
