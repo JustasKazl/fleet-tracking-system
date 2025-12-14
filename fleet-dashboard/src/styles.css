@@ -1213,8 +1213,13 @@ body {
 /* KPI BAR */
 .kpi-row {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 14px;
+  grid-template-columns: repeat(2, 1fr); /* default: 2 + 2 */
+}
+@media (min-width: 900px) {
+  .kpi-row {
+    grid-template-columns: repeat(4, 1fr);
+  }
 }
 
 .kpi-card {
