@@ -168,7 +168,7 @@ def store(vehicle_id, data):
         cur.execute("""
             INSERT INTO telemetry (
                 vehicle_id, timestamp, latitude, longitude,
-                altitude, speed, angle, satellites, obd_data, received_at
+                altitude, speed, angle, satellites, io_elements, received_at
             ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW())
         """, (
             vehicle_id,
