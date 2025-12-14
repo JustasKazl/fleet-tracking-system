@@ -1,13 +1,14 @@
-# --- Build stage ---
-FROM node:18 AS build
+# Build stage
+FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Copy package files first (better layer caching)
-COPY package.json package-lock.json ./
+# Copy package files
+COPY package.json ./
 
-# Install ALL dependencies (devDependencies needed for vite build)
-RUN npm ci
+# Delete old lock file and install dependencies
+RUN rm -f package-lock.json && \
+    npm install --legacy-peer-deps
 
 # Copy all source code
 COPY . .
@@ -16,16 +17,16 @@ COPY . .
 RUN npm run build
 
 # --- Production stage ---
-FROM caddy:2
+FROM nginx:alpine
 
-# Copy Caddy configuration
-COPY Caddyfile /etc/caddy/Caddyfile
+# Copy built files to nginx
+COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Copy built static files from build stage
-COPY --from=build /app/dist /srv
+# Copy nginx configuration if you have one
+# COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# Expose port 8080
-EXPOSE 8080
+# Expose port 80
+EXPOSE 80
 
-# Start Caddy server
-CMD ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
+# Start nginx
+CMD ["nginx", "-g", "daemon off;"]
