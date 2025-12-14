@@ -17,7 +17,7 @@ DATABASE_URL = os.environ.get('DATABASE_URL')
 JWT_SECRET = os.environ.get('JWT_SECRET', 'your-secret-key-change-in-production')
 JWT_ALGORITHM = 'HS256'
 JWT_EXPIRATION_HOURS = 24
-TCP_PORT = int(os.environ.get('TCP_PORT', 5060))
+TCP_PORT = int(os.environ.get('TCP_PORT', 5055))
 
 # Check if DATABASE_URL is set
 if not DATABASE_URL:
@@ -107,19 +107,17 @@ def init_db():
         """)
         print("✅ users table created/verified")
 
-        # Create vehicles table with user_id foreign key
+        # Create vehicles table with user_id foreign key (IMEI-ONLY)
         cur.execute("""
         CREATE TABLE IF NOT EXISTS vehicles (
             id SERIAL PRIMARY KEY,
             user_id INTEGER NOT NULL,
             device_id TEXT NOT NULL,
-            vin TEXT NOT NULL UNIQUE,
+            imei TEXT NOT NULL UNIQUE,
             brand TEXT,
             model TEXT,
             custom_name TEXT,
             plate TEXT,
-            imei TEXT,
-            fmb_serial TEXT,
             status TEXT DEFAULT 'unknown',
             total_km INTEGER DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -128,7 +126,7 @@ def init_db():
         """)
         print("✅ vehicles table created/verified")
 
-        # Create telemetry table for GPS data from FMB003
+        # Create telemetry table for GPS data from FMB devices
         cur.execute("""
         CREATE TABLE IF NOT EXISTS telemetry (
             id BIGSERIAL PRIMARY KEY,
@@ -387,45 +385,23 @@ def parse_codec8_packet(buffer):
     return records
 
 def store_telemetry(imei, records):
-    """Store telemetry records in database"""
+    """Store telemetry records in database (IMEI-ONLY)"""
     try:
         conn = get_db()
         cur = conn.cursor()
         
-        vehicle_id = None
-        vin = None
+        # Find vehicle by IMEI (simple and reliable)
+        cur.execute("SELECT id FROM vehicles WHERE imei = %s", (imei,))
+        result = cur.fetchone()
         
-        # Try to extract VIN from first record's IO elements (IO ID 40005 = OBD VIN)
-        if records and records[0].get('io_elements'):
-            vin = records[0]['io_elements'].get(40005)
-            if vin:
-                # VIN might be bytes, convert to string
-                if isinstance(vin, bytes):
-                    vin = vin.decode('utf-8', errors='ignore')
-                print(f"📋 VIN detected from OBD: {vin}")
-                
-                # Find vehicle by VIN
-                cur.execute("SELECT id FROM vehicles WHERE vin = %s", (str(vin),))
-                result = cur.fetchone()
-                if result:
-                    vehicle_id = result[0]
-                    print(f"✅ Found vehicle by VIN: {vehicle_id}")
-        
-        # Fallback: Find vehicle by IMEI if VIN not found
-        if not vehicle_id:
-            print(f"⚠️ VIN not found in telemetry, falling back to IMEI lookup")
-            cur.execute("SELECT id FROM vehicles WHERE imei = %s OR fmb_serial = %s", (imei, imei))
-            result = cur.fetchone()
-            
-            if result:
-                vehicle_id = result[0]
-                print(f"✅ Found vehicle by IMEI: {vehicle_id}")
-        
-        if not vehicle_id:
-            print(f"❌ Vehicle not found for IMEI: {imei}, VIN: {vin}")
+        if not result:
+            print(f"❌ Vehicle not found for IMEI: {imei}")
             cur.close()
             conn.close()
             return False
+        
+        vehicle_id = result[0]
+        print(f"✅ Found vehicle ID: {vehicle_id} for IMEI: {imei}")
         
         # Insert telemetry records
         for record in records:
@@ -462,8 +438,6 @@ def store_telemetry(imei, records):
         return False
 
 # ─────── TELTONIKA TCP SERVER ───────
-
-# FIXED TELTONIKA TCP SERVER - Replace in backend/app.py
 
 def start_tcp_server():
     """Start TCP server to receive Teltonika data"""
@@ -534,7 +508,7 @@ def start_tcp_server():
                     records = parse_codec8_packet(packet)
                     
                     if records:
-                        print(f"✅ Parsed {len(records)} records from {imei}")
+                        print(f"✅ Parsed {len(records)} records from IMEI {imei}")
                         
                         # Store in database
                         if store_telemetry(imei, records):
@@ -772,14 +746,14 @@ def api_health():
             "message": str(e)
         }), 500
 
-# ======= TELEMETRY WEBHOOK (FMB-003 via HTTP POST) =========
+# ======= TELEMETRY WEBHOOK (FMB via HTTP POST) =========
 
 @app.route("/api/telemetry/webhook", methods=["POST"])
 def fmb_webhook():
     """
-    Webhook for FMB003 to send GPS data via HTTP POST
+    Webhook for FMB devices to send GPS data via HTTP POST
     
-    Expected JSON from FMB003:
+    Expected JSON from FMB:
     {
         "imei": "860123456789012",
         "latitude": 54.6872,
@@ -809,7 +783,7 @@ def fmb_webhook():
         
         try:
             # Find vehicle by IMEI
-            cur.execute("SELECT id FROM vehicles WHERE imei = %s OR fmb_serial = %s", (imei, imei))
+            cur.execute("SELECT id FROM vehicles WHERE imei = %s", (imei,))
             result = cur.fetchone()
             
             if not result:
@@ -886,11 +860,11 @@ def fmb_webhook():
         print(f"❌ Webhook error: {e}")
         return jsonify({"error": str(e)}), 500
 
-# ======= TELEMETRY FROM FMB-003 =========
+# ======= TELEMETRY FROM FMB DEVICES =========
 
 @app.route("/api/telemetry/<imei>", methods=["GET"])
 def get_telemetry(imei):
-    """Get GPS data for a device"""
+    """Get GPS data for a device (IMEI-based)"""
     try:
         limit = request.args.get('limit', default=100, type=int)
         offset = request.args.get('offset', default=0, type=int)
@@ -899,7 +873,7 @@ def get_telemetry(imei):
         cur = conn.cursor(cursor_factory=RealDictCursor)
         
         # Find vehicle by IMEI
-        cur.execute("SELECT id FROM vehicles WHERE imei = %s OR fmb_serial = %s", (imei, imei))
+        cur.execute("SELECT id FROM vehicles WHERE imei = %s", (imei,))
         result = cur.fetchone()
         
         if not result:
@@ -935,7 +909,7 @@ def get_track(imei):
         cur = conn.cursor(cursor_factory=RealDictCursor)
         
         # Find vehicle by IMEI
-        cur.execute("SELECT id FROM vehicles WHERE imei = %s OR fmb_serial = %s", (imei, imei))
+        cur.execute("SELECT id FROM vehicles WHERE imei = %s", (imei,))
         result = cur.fetchone()
         
         if not result:
@@ -983,24 +957,23 @@ def api_get_vehicles(user_id):
 @app.route("/api/vehicles", methods=["POST"])
 @require_auth
 def api_add_vehicle(user_id):
-    """Create a new vehicle for the authenticated user"""
+    """Create a new vehicle for the authenticated user (IMEI-ONLY)"""
     data = request.json
     print("Vehicle POST:", data)
 
     device_id = data.get("device_id")
-    vin = data.get("vin")
+    imei = data.get("imei")
     
     # Validate required fields
     if not device_id:
         return jsonify({"error": "device_id is required"}), 400
     
-    if not vin:
-        return jsonify({"error": "VIN is required"}), 400
+    if not imei:
+        return jsonify({"error": "IMEI is required"}), 400
     
-    # Validate VIN format (typically 17 characters)
-    vin = vin.upper().strip()
-    if len(vin) != 17:
-        return jsonify({"error": "VIN must be 17 characters"}), 400
+    # Validate IMEI format (typically 15 digits)
+    if not imei.isdigit() or len(imei) != 15:
+        return jsonify({"error": "IMEI must be 15 digits"}), 400
 
     conn = get_db()
     cur = conn.cursor(cursor_factory=RealDictCursor)
@@ -1008,19 +981,17 @@ def api_add_vehicle(user_id):
     try:
         cur.execute("""
             INSERT INTO vehicles 
-            (user_id, device_id, vin, brand, model, custom_name, plate, imei, fmb_serial, status, total_km)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            (user_id, device_id, imei, brand, model, custom_name, plate, status, total_km)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
         """, (
             user_id,
             device_id,
-            vin,
+            imei,
             data.get("brand", ""),
             data.get("model", ""),
             data.get("custom_name", ""),
             data.get("plate", ""),
-            data.get("imei", ""),
-            data.get("fmb_serial", ""),
             data.get("status", "unknown"),
             data.get("total_km", 0),
         ))
@@ -1035,8 +1006,8 @@ def api_add_vehicle(user_id):
         conn.rollback()
         cur.close()
         conn.close()
-        if "vin" in str(e).lower():
-            return jsonify({"error": "VIN already registered to another vehicle"}), 409
+        if "imei" in str(e).lower():
+            return jsonify({"error": "IMEI already registered to another vehicle"}), 409
         return jsonify({"error": "Failed to create vehicle"}), 409
     except Exception as e:
         conn.rollback()
@@ -1085,16 +1056,14 @@ def api_update_vehicle(user_id, vehicle_id):
     try:
         cur.execute("""
             UPDATE vehicles
-            SET brand = %s, model = %s, custom_name = %s, plate = %s, imei = %s, 
-                fmb_serial = %s, status = %s, total_km = %s
+            SET brand = %s, model = %s, custom_name = %s, plate = %s, 
+                status = %s, total_km = %s
             WHERE id = %s AND user_id = %s
         """, (
             data.get("brand"),
             data.get("model"),
             data.get("custom_name"),
             data.get("plate"),
-            data.get("imei"),
-            data.get("fmb_serial"),
             data.get("status", "offline"),
             data.get("total_km", 0),
             vehicle_id,
@@ -1171,7 +1140,7 @@ def upload_document(user_id, vehicle_id):
         return jsonify({"error": "No file"}), 400
 
     if not allowed_file(file.filename):
-        return jsonify({"error": "Leidžiami tik PDF, JPG, JPEG, PNG"}), 400
+        return jsonify({"error": "Allowed files: PDF, JPG, JPEG, PNG"}), 400
 
     try:
         ext = file.filename.rsplit(".", 1)[1].lower()
@@ -1406,13 +1375,13 @@ def debug_columns():
 
 @app.route("/")
 def root():
-    return "Fleet backend running on PostgreSQL with Auth + Teltonika TCP", 200
+    return "Fleet backend running on PostgreSQL with Auth + Teltonika TCP (IMEI-ONLY)", 200
 
 # --------------------- MAIN ------------------------
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("🚀 FLEETTRACK BACKEND STARTUP")
+    print("🚀 FLEETTRACK BACKEND STARTUP (IMEI-ONLY)")
     print("=" * 60)
     
     try:
