@@ -292,12 +292,13 @@ def handle_client(client_socket, addr):
                 
                 packet = buffer[:total_packet_size]
                 
-                # Validate CRC
+                # Validate CRC (TEMPORARILY DISABLED FOR TESTING)
                 received_crc = int.from_bytes(packet[-4:], 'big')
                 calculated_crc = calculate_crc16(packet[8:-4])
                 
                 if received_crc != calculated_crc:
-                    print(f"⚠️ CRC mismatch!")
+                    print(f"⚠️ CRC mismatch! Received: {hex(received_crc)}, Calculated: {hex(calculated_crc)}")
+                    print(f"⚠️ IGNORING CRC ERROR - continuing to parse packet anyway...")
                 
                 # Parse packet
                 records = parse_codec8_packet(packet)
