@@ -259,9 +259,11 @@ def handle_client(client_socket, addr):
                 
                 print(f"📊 Codec ID: {codec_id}, Records: {num_records}")
                 
-                if codec_id == 0x08:  # Codec 8
+                if codec_id == 0x08 or codec_id == 142:  # Codec 8 or Codec 8 Extended (0x8E)
                     offset = 10  # Start after codec_id and num_records
                     records_stored = 0
+                    
+                    print(f"🔧 Processing {'Codec 8 Extended' if codec_id == 142 else 'Codec 8'}")
                     
                     for i in range(num_records):
                         telemetry_data, bytes_consumed = parse_avl_record(packet, offset)
