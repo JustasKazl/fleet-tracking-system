@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 
-function VehicleCard({ vehicle, onDelete }) {
+function VehicleCard({ vehicle, onDelete, onEdit }) {
   const {
     id,
     brand,
@@ -49,7 +49,7 @@ function VehicleCard({ vehicle, onDelete }) {
 
   // Helper to format last seen time
   const formatLastSeen = (timestamp) => {
-    if (!timestamp) return "Nėra";
+    if (!timestamp) return "Niekada";
     try {
       const date = new Date(timestamp);
       const now = new Date();
@@ -136,7 +136,7 @@ function VehicleCard({ vehicle, onDelete }) {
           <button
             type="button"
             className="btn-ghost"
-            onClick={() => navigate(`/vehicles/edit/${id}`)}
+            onClick={() => onEdit?.(vehicle)}
           >
             Redaguoti
           </button>
