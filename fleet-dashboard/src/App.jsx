@@ -41,10 +41,6 @@ function AppRoutes() {
         element={isAuthenticated ? <AddVehiclePage /> : <Navigate to="/" replace />} 
       />
       <Route 
-        path="/vehicles/edit/:id" 
-        element={isAuthenticated ? <EditVehiclePage /> : <Navigate to="/" replace />} 
-      />
-      <Route 
         path="/vehicles/:id" 
         element={isAuthenticated ? <VehicleDetailsPage /> : <Navigate to="/" replace />} 
       />
