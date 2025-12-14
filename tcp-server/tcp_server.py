@@ -165,21 +165,65 @@ def extract_obd(io):
 def parse_avl(buf, offset):
     buf_len = len(buf)
 
-    # 1. Check if we can read timestamp + priority + GPS (minimum 26 bytes)
+    # Minimalus ilgis: timestamp(8) + priority(1) + GPS(15) + event_io + total_io
     if offset + 26 > buf_len:
         return None, offset
 
-    ts_raw = buf[offset:offset+8]
-    ts = struct.unpack('>Q', ts_raw)[0]
+    ts = struct.unpack('>Q', buf[offset:offset+8])[0]
     offset += 8
 
-    # Validate timestamp (ms since epoch)
-    ts_seconds = ts / 1000
-    if ts_seconds < 946684800 or ts_seconds > 4102444800:
-        # < 2000-01-01 or > 2100-01-01 → invalid
+    ts_sec = ts / 1000
+    if ts_sec < 946684800 or ts_sec > 4102444800:
         return None, offset
 
-    timestamp = datetime.utcfromtimestamp(ts_seconds)
+    timestamp = datetime.utcfromtimestamp(ts_sec)
+
+    # Priority
+    if offset + 1 > buf_len:
+        return None, offset
+    priority = buf[offset]
+    offset += 1
+
+    # GPS data (15 bytes)
+    if offset + 15 > buf_len:
+        return None, offset
+
+    lon = struct.unpack('>i', buf[offset:offset+4])[0] / 1e7
+    offset += 4
+    lat = struct.unpack('>i', buf[offset:offset+4])[0] / 1e7
+    offset += 4
+    alt = struct.unpack('>h', buf[offset:offset+2])[0]
+    offset += 2
+    angle = struct.unpack('>H', buf[offset:offset+2])[0]
+    offset += 2
+    sats = buf[offset]
+    offset += 1
+    speed = struct.unpack('>H', buf[offset:offset+2])[0]
+    offset += 2
+
+    # Event IO + Total IO
+    if offset + 2 > buf_len:
+        return None, offset
+    event_io = buf[offset]
+    offset += 1
+    total_io = buf[offset]
+    offset += 1
+
+    io, offset = parse_io_elements(buf, offset)
+    obd = extract_obd(io)
+
+    return {
+        'timestamp': timestamp,
+        'latitude': lat,
+        'longitude': lon,
+        'altitude': alt,
+        'angle': angle,
+        'speed': speed,
+        'satellites': sats,
+        'priority': priority,
+        'obd': obd
+    }, offset
+
 
 
 # ================= STORAGE =================
