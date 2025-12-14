@@ -112,7 +112,6 @@ def init_db():
         CREATE TABLE IF NOT EXISTS vehicles (
             id SERIAL PRIMARY KEY,
             user_id INTEGER NOT NULL,
-            device_id TEXT NOT NULL,
             imei TEXT NOT NULL UNIQUE,
             brand TEXT,
             model TEXT,
@@ -957,17 +956,13 @@ def api_get_vehicles(user_id):
 @app.route("/api/vehicles", methods=["POST"])
 @require_auth
 def api_add_vehicle(user_id):
-    """Create a new vehicle for the authenticated user (IMEI-ONLY)"""
+    """Create a new vehicle for the authenticated user (IMEI-ONLY, minimal fields)"""
     data = request.json
     print("Vehicle POST:", data)
 
-    device_id = data.get("device_id")
     imei = data.get("imei")
     
     # Validate required fields
-    if not device_id:
-        return jsonify({"error": "device_id is required"}), 400
-    
     if not imei:
         return jsonify({"error": "IMEI is required"}), 400
     
@@ -981,12 +976,11 @@ def api_add_vehicle(user_id):
     try:
         cur.execute("""
             INSERT INTO vehicles 
-            (user_id, device_id, imei, brand, model, custom_name, plate, status, total_km)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            (user_id, imei, brand, model, custom_name, plate, status, total_km)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
         """, (
             user_id,
-            device_id,
             imei,
             data.get("brand", ""),
             data.get("model", ""),
