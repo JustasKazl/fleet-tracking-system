@@ -1335,3 +1335,128 @@ body {
   border-color: var(--accent);
   color: var(--accent);
 }
+
+/* ALERTS */
+.alert-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.alert-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(102, 126, 234, 0.05);
+  border: 1px solid var(--border-light);
+  transition: all 0.2s;
+}
+
+.alert-item:hover {
+  background: rgba(102, 126, 234, 0.1);
+  border-color: var(--border-color);
+}
+
+.alert-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.alert-dot.good {
+  background: var(--good);
+  box-shadow: 0 0 8px var(--good);
+}
+
+.alert-dot.warn {
+  background: var(--warn);
+  box-shadow: 0 0 8px var(--warn);
+}
+
+.alert-dot.bad {
+  background: var(--bad);
+  box-shadow: 0 0 8px var(--bad);
+}
+
+.alert-main {
+  flex: 1;
+}
+
+.alert-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.alert-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.alert-time {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* TOP VEHICLES */
+.top-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.top-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(102, 126, 234, 0.05);
+  border: 1px solid var(--border-light);
+  font-size: 13px;
+  transition: all 0.2s;
+}
+
+.top-item:hover {
+  background: rgba(102, 126, 234, 0.1);
+  border-color: var(--border-color);
+}
+
+/* TABLE */
+.vehicles-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.vehicles-table thead {
+  background: rgba(102, 126, 234, 0.08);
+}
+
+.vehicles-table th,
+.vehicles-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-light);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.vehicles-table th {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.vehicles-table tr:hover {
+  background: rgba(102, 126, 234, 0.05);
+}
+
+.vehicles-table tr:last-child td {
+  border-bottom: none;
+}
