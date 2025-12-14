@@ -7,6 +7,7 @@ import os
 import socket
 import threading
 from datetime import datetime
+from http.server import HTTPServer, BaseHTTPRequestHandler
 import psycopg
 import json
 
@@ -164,55 +165,37 @@ def parse_codec8_packet(buffer):
     return records
 
 def store_telemetry(imei, records):
-    """Store telemetry records in database - Accept all connections, only store if VIN matches"""
+    """Store telemetry records in database"""
     try:
         conn = get_db()
         cur = conn.cursor()
         
-        vehicle_id = None
-        vin = None
+        # Find vehicle by IMEI (primary device identifier)
+        # Note: VIN is stored in database but not transmitted by FMB003
+        print(f"🔍 Looking up vehicle with IMEI: {imei}")
+        cur.execute("SELECT id, vin FROM vehicles WHERE imei = %s OR fmb_serial = %s", (imei, imei))
+        result = cur.fetchone()
         
-        # Try to extract VIN from first record's IO elements
-        if records and records[0].get('io_elements'):
-            vin = records[0]['io_elements'].get(40005)
-            if vin:
-                if isinstance(vin, bytes):
-                    vin = vin.decode('utf-8', errors='ignore')
-                print(f"📋 VIN detected from OBD: {vin}")
-                
-                cur.execute("SELECT id FROM vehicles WHERE vin = %s", (str(vin),))
-                result = cur.fetchone()
-                if result:
-                    vehicle_id = result[0]
-                    print(f"✅ Found vehicle by VIN: {vehicle_id}")
+        print(f"🔍 Database query result: {result}")
         
-        # Accept connection but don't store if no vehicle match
-        if not vehicle_id:
-            print("=" * 60)
-            print(f"⚠️  DATA NOT STORED - No matching vehicle")
-            print(f"📱 IMEI: {imei}")
-            print(f"📋 VIN: {vin if vin else 'NOT PROVIDED'}")
-            print(f"📊 Records received: {len(records)}")
-            print("─" * 60)
-            for idx, record in enumerate(records, 1):
-                print(f"Record {idx}:")
-                print(f"  Timestamp: {record['timestamp']}")
-                print(f"  Location: {record['latitude']}, {record['longitude']}")
-                print(f"  Speed: {record['speed']} km/h")
-                print(f"  Satellites: {record['satellites']}")
-                print(f"  IO Elements: {record['io_elements']}")
-            print("=" * 60)
-            
+        if not result:
+            # Unauthorized/unknown device
+            log_unknown_device(imei, None, records)
+            print(f"❌ REJECTED: Unauthorized device IMEI: {imei}")
             cur.close()
             conn.close()
-            return True  # Accept the connection anyway
+            return False
+        
+        vehicle_id = result[0]
+        vin = result[1]
+        print(f"✅ Authorized device IMEI: {imei} → Vehicle ID: {vehicle_id}, VIN: {vin}")
         
         # Insert telemetry records
         for record in records:
             cur.execute("""
                 INSERT INTO telemetry 
                 (vehicle_id, timestamp, latitude, longitude, altitude, angle, satellites, speed, io_elements)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (
                 vehicle_id,
                 record['timestamp'],
@@ -225,18 +208,17 @@ def store_telemetry(imei, records):
                 json.dumps(record['io_elements'])
             ))
         
-        # Update vehicle status
         cur.execute("UPDATE vehicles SET status = %s WHERE id = %s", ('online', vehicle_id))
         
         conn.commit()
         cur.close()
         conn.close()
-        print(f"✅ Stored {len(records)} telemetry records for vehicle {vehicle_id}")
+        print(f"✅ Stored {len(records)} telemetry records for vehicle {vehicle_id} (VIN: {vin})")
         return True
         
     except Exception as e:
         print(f"❌ Error storing telemetry: {e}")
-        return True  # Still accept the connection
+        return False
 
 def log_unknown_device(imei, vin, records):
     """Log unknown device attempts"""
@@ -304,33 +286,36 @@ def handle_client(client_socket, addr):
                 
                 packet = buffer[:total_packet_size]
                 
-                # Debug: Show packet hex
-                print(f"📦 Packet HEX (first 64 bytes): {packet[:64].hex()}")
+                # Validate CRC
+                received_crc = int.from_bytes(packet[-4:], 'big')
+                calculated_crc = calculate_crc16(packet[8:-4])
                 
-                # Skip CRC validation - accept everything
-                print(f"⏭️ Skipping CRC validation")
+                if received_crc != calculated_crc:
+                    print(f"⚠️ CRC mismatch!")
                 
                 # Parse packet
                 records = parse_codec8_packet(packet)
                 
-                # ALWAYS send ACK regardless of parsing result
-                try:
-                    if records and len(records) > 0:
-                        print(f"✅ Parsed {len(records)} records from {imei}")
-                        store_telemetry(imei, records)
+                if records:
+                    print(f"✅ Parsed {len(records)} records from {imei}")
+                    
+                    if store_telemetry(imei, records):
                         ack = len(records).to_bytes(4, 'big')
+                        client_socket.sendall(ack)  # sendall ensures full transmission
+                        print(f"📤 Sent ACK: {len(records)} records")
                     else:
-                        print(f"❌ Failed to parse packet - sending ACK anyway")
-                        ack = b'\x00\x00\x00\x01'  # ACK 1 record
-                    
-                    # Send ACK and ensure it's transmitted
-                    bytes_sent = client_socket.send(ack)
-                    print(f"📤 Sent ACK: {ack.hex()} ({bytes_sent} bytes transmitted)")
-                    
-                except Exception as ack_error:
-                    print(f"❌ Failed to send ACK: {ack_error}")
-                    import traceback
-                    traceback.print_exc()
+                        # Send NACK (0 records accepted - unknown device)
+                        nack = b'\x00\x00\x00\x00'
+                        client_socket.sendall(nack)  # sendall ensures full transmission
+                        print(f"📤 Sent NACK: 0 records (unknown device - no VIN match)")
+                        # Give device time to receive NACK before we process more data
+                        import time
+                        time.sleep(0.1)
+                else:
+                    print(f"❌ Failed to parse packet")
+                    nack = b'\x00\x00\x00\x00'
+                    client_socket.sendall(nack)  # sendall ensures full transmission
+                    print(f"📤 Sent NACK: parse failed")
                 
                 buffer = buffer[total_packet_size:]
                 print(f"🔄 Buffer remaining: {len(buffer)} bytes")
@@ -363,6 +348,65 @@ def run_server():
     finally:
         server.close()
 
+# ─────── HTTP LOG VIEWER ───────
+
+class LogViewerHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        if self.path == '/logs':
+            try:
+                # Read the log file
+                with open('/data/unknown_devices.log', 'r') as f:
+                    content = f.read()
+                
+                # Return as plain text
+                self.send_response(200)
+                self.send_header('Content-type', 'text/plain; charset=utf-8')
+                self.end_headers()
+                
+                if content:
+                    self.wfile.write(content.encode())
+                else:
+                    self.wfile.write(b'No unknown devices logged yet.')
+                    
+            except FileNotFoundError:
+                self.send_response(200)
+                self.send_header('Content-type', 'text/plain')
+                self.end_headers()
+                self.wfile.write(b'No unknown devices logged yet.')
+                
+        elif self.path == '/':
+            # Show info page
+            self.send_response(200)
+            self.send_header('Content-type', 'text/html')
+            self.end_headers()
+            html = """
+            <html>
+            <head><title>TCP Server Logs</title></head>
+            <body style="font-family: monospace; padding: 20px;">
+                <h1>🚀 Teltonika TCP Server</h1>
+                <p><a href="/logs">View Unknown Devices Log</a></p>
+            </body>
+            </html>
+            """
+            self.wfile.write(html.encode())
+        else:
+            self.send_response(404)
+            self.end_headers()
+    
+    def log_message(self, format, *args):
+        # Suppress HTTP request logs
+        pass
+
+def start_log_viewer():
+    """Start HTTP server for viewing logs"""
+    def run():
+        server = HTTPServer(('0.0.0.0', 8080), LogViewerHandler)
+        server.serve_forever()
+    
+    thread = threading.Thread(target=run, daemon=True)
+    thread.start()
+    print("📊 Log viewer available at http://<your-domain>:8080/logs")
+
 # ─────── MAIN ───────
 
 if __name__ == "__main__":
@@ -373,4 +417,8 @@ if __name__ == "__main__":
     print(f"🗄️ Database: Connected")
     print("=" * 60)
     
+    # Start HTTP log viewer
+    start_log_viewer()
+    
+    # Start TCP server (blocks forever)
     run_server()
