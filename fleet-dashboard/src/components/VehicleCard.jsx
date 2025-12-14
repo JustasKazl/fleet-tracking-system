@@ -44,15 +44,25 @@ function VehicleCard({ vehicle, onDelete, onEdit }) {
   const avatarLetter = brand?.[0]?.toUpperCase() || "?";
   const navigate = useNavigate();
 
+  // Helper to safely parse coordinates
+  const parseCoordinate = (coord) => {
+    if (coord === null || coord === undefined) return null;
+    const num = typeof coord === 'string' ? parseFloat(coord) : coord;
+    return (!isNaN(num) && isFinite(num)) ? num : null;
+  };
+
   // Reverse geocoding with caching
   const getLocationName = async (lat, lon) => {
-    if (!lat || !lon) {
+    const parsedLat = parseCoordinate(lat);
+    const parsedLon = parseCoordinate(lon);
+
+    if (parsedLat === null || parsedLon === null) {
       setLocationName("Nežinoma vieta");
       return;
     }
 
     // Round coordinates to 2 decimal places for cache key (approx 1km accuracy)
-    const cacheKey = `${lat.toFixed(2)},${lon.toFixed(2)}`;
+    const cacheKey = `${parsedLat.toFixed(2)},${parsedLon.toFixed(2)}`;
 
     // Check cache first
     if (locationCache.has(cacheKey)) {
@@ -67,7 +77,7 @@ function VehicleCard({ vehicle, onDelete, onEdit }) {
       // Rate limit: 1 request/second, max 1 request per IP
       const response = await fetch(
         `https://nominatim.openstreetmap.org/reverse?` +
-        `lat=${lat}&lon=${lon}&format=json&accept-language=lt&zoom=10`,
+        `lat=${parsedLat}&lon=${parsedLon}&format=json&accept-language=lt&zoom=10`,
         {
           headers: {
             'User-Agent': 'FleetTrack/1.0'
@@ -106,12 +116,15 @@ function VehicleCard({ vehicle, onDelete, onEdit }) {
 
   // Fetch location name when component mounts
   useEffect(() => {
-    if (last_latitude && last_longitude) {
+    const parsedLat = parseCoordinate(last_latitude);
+    const parsedLon = parseCoordinate(last_longitude);
+
+    if (parsedLat !== null && parsedLon !== null) {
       // Add random delay to respect Nominatim rate limits
       // Spread requests over time when loading multiple cards
       const delay = Math.random() * 2000; // 0-2 seconds
       const timer = setTimeout(() => {
-        getLocationName(last_latitude, last_longitude);
+        getLocationName(parsedLat, parsedLon);
       }, delay);
 
       return () => clearTimeout(timer);
@@ -163,13 +176,28 @@ function VehicleCard({ vehicle, onDelete, onEdit }) {
     if (loadingLocation) {
       return "🔄 Kraunama...";
     }
-    if (!last_latitude || !last_longitude) {
+    
+    const parsedLat = parseCoordinate(last_latitude);
+    const parsedLon = parseCoordinate(last_longitude);
+    
+    if (parsedLat === null || parsedLon === null) {
       return "Nėra duomenų";
     }
     if (locationName) {
       return `📍 ${locationName}`;
     }
     return "Nežinoma vieta";
+  };
+
+  const getCoordinatesTooltip = () => {
+    const parsedLat = parseCoordinate(last_latitude);
+    const parsedLon = parseCoordinate(last_longitude);
+    
+    if (parsedLat === null || parsedLon === null) {
+      return "Koordinatės neprieinamos";
+    }
+    
+    return `${parsedLat.toFixed(6)}°, ${parsedLon.toFixed(6)}°`;
   };
 
   return (
@@ -208,7 +236,7 @@ function VehicleCard({ vehicle, onDelete, onEdit }) {
           <div 
             className="vehicle-meta-value" 
             style={{ fontSize: '11px' }}
-            title={last_latitude && last_longitude ? `${last_latitude.toFixed(6)}°, ${last_longitude.toFixed(6)}°` : ''}
+            title={getCoordinatesTooltip()}
           >
             {getLocationDisplay()}
           </div>
