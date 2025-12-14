@@ -13,6 +13,7 @@ function VehiclesPage() {
 
   const [vehicles, setVehicles] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   
   // Modal state
@@ -28,20 +29,45 @@ function VehiclesPage() {
 
   async function loadVehicles() {
     setLoading(true);
+    setError(null);
+    
     try {
+      console.log('Loading vehicles from:', `${API_BASE_URL}/api/vehicles`);
+      
       const res = await fetch(`${API_BASE_URL}/api/vehicles`, {
         headers: {
           "Authorization": `Bearer ${token}`,
           "Content-Type": "application/json",
         },
       });
+
+      console.log('Response status:', res.status);
+
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      }
+
       const data = await res.json();
-      setVehicles(data);
+      console.log('Received vehicles:', data);
+
+      // Ensure data is an array
+      if (Array.isArray(data)) {
+        setVehicles(data);
+      } else if (data && Array.isArray(data.vehicles)) {
+        setVehicles(data.vehicles);
+      } else {
+        console.error('Invalid data format:', data);
+        setVehicles([]);
+        setError('Invalid data format received from server');
+      }
     } catch (err) {
-      console.error(err);
-      showToast("Nepavyko užkrauti automobilių", "error");
+      console.error('Error loading vehicles:', err);
+      setError(err.message);
+      showToast("Nepavyko užkrauti automobilių: " + err.message, "error");
+      setVehicles([]); // Set empty array on error
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   function handleDeleteClick(id) {
@@ -65,11 +91,12 @@ function VehiclesPage() {
         showToast("Automobilis pašalintas", "success");
         loadVehicles();
       } else {
-        showToast("Nepavyko pašalinti automobilio", "error");
+        const errorText = await res.text();
+        showToast("Nepavyko pašalinti automobilio: " + errorText, "error");
       }
     } catch (err) {
       console.error(err);
-      showToast("Klaida šalinant automobilį", "error");
+      showToast("Klaida šalinant automobilį: " + err.message, "error");
     } finally {
       setDeleteConfirm(null);
     }
@@ -146,8 +173,36 @@ function VehiclesPage() {
         </button>
       </div>
 
+      {/* Error Message */}
+      {error && (
+        <div style={{
+          background: 'rgba(242, 68, 68, 0.1)',
+          border: '1px solid rgba(242, 68, 68, 0.3)',
+          borderRadius: '8px',
+          padding: '16px',
+          marginBottom: '20px',
+          color: '#f24444'
+        }}>
+          <strong>Klaida:</strong> {error}
+          <button 
+            onClick={loadVehicles}
+            style={{
+              marginLeft: '16px',
+              padding: '4px 12px',
+              background: 'transparent',
+              border: '1px solid rgba(242, 68, 68, 0.5)',
+              borderRadius: '4px',
+              color: '#f24444',
+              cursor: 'pointer'
+            }}
+          >
+            Bandyti dar kartą
+          </button>
+        </div>
+      )}
+
       {/* Search Results Info */}
-      {searchQuery && (
+      {searchQuery && !loading && !error && (
         <div className="search-results-info">
           Rasta <strong>{filteredVehicles.length}</strong> iš <strong>{vehicles.length}</strong> automobilių
         </div>
@@ -155,7 +210,21 @@ function VehiclesPage() {
 
       {/* Loading State */}
       {loading ? (
-        <div className="loading-message">Kraunama...</div>
+        <div className="loading-message">
+          <div style={{ textAlign: 'center', padding: '40px' }}>
+            <div className="spinner" style={{ margin: '0 auto 16px' }}></div>
+            <p>Kraunama...</p>
+          </div>
+        </div>
+      ) : error ? (
+        // Error state - already shown above
+        <div className="empty-state">
+          <div className="empty-state-icon">⚠️</div>
+          <h2 className="empty-state-title">Klaida kraunant duomenis</h2>
+          <p className="empty-state-text">
+            Patikrinkite serverio būseną ir bandykite dar kartą
+          </p>
+        </div>
       ) : filteredVehicles.length === 0 ? (
         // Empty State
         searchQuery ? (
