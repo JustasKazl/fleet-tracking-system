@@ -89,20 +89,66 @@ def should_save(vehicle_id, data):
 
 def parse_io_elements(buf, offset):
     io = {}
+    buf_len = len(buf)
 
-    for size, fmt, step in [
-        (1, 'B', 2),
-        (2, '>H', 3),
-        (4, '>I', 5),
-        (8, '>Q', 9),
-    ]:
-        count = buf[offset]
-        offset += 1
-        for _ in range(count):
-            io_id = buf[offset]
-            value = struct.unpack(fmt, buf[offset+1:offset+step])[0]
-            io[io_id] = value
-            offset += step
+    def can_read(n):
+        return offset + n <= buf_len
+
+    # 1-byte IO
+    if not can_read(1):
+        return io, offset
+    n1 = buf[offset]
+    offset += 1
+
+    for _ in range(n1):
+        if not can_read(2):
+            return io, offset
+        io_id = buf[offset]
+        io_value = buf[offset + 1]
+        io[io_id] = io_value
+        offset += 2
+
+    # 2-byte IO
+    if not can_read(1):
+        return io, offset
+    n2 = buf[offset]
+    offset += 1
+
+    for _ in range(n2):
+        if not can_read(3):
+            return io, offset
+        io_id = buf[offset]
+        io_value = struct.unpack('>H', buf[offset + 1:offset + 3])[0]
+        io[io_id] = io_value
+        offset += 3
+
+    # 4-byte IO
+    if not can_read(1):
+        return io, offset
+    n4 = buf[offset]
+    offset += 1
+
+    for _ in range(n4):
+        if not can_read(5):
+            return io, offset
+        io_id = buf[offset]
+        io_value = struct.unpack('>I', buf[offset + 1:offset + 5])[0]
+        io[io_id] = io_value
+        offset += 5
+
+    # 8-byte IO
+    if not can_read(1):
+        return io, offset
+    n8 = buf[offset]
+    offset += 1
+
+    for _ in range(n8):
+        if not can_read(9):
+            return io, offset
+        io_id = buf[offset]
+        io_value = struct.unpack('>Q', buf[offset + 1:offset + 9])[0]
+        io[io_id] = io_value
+        offset += 9
 
     return io, offset
 
