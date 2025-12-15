@@ -6,7 +6,7 @@ import VehiclesPage from "./pages/VehiclesPage";
 import VehicleDetailsPage from "./pages/VehicleDetailsPage";
 import TermsOfService from "./pages/TermsOfService";
 import PrivacyPolicy from "./pages/Privacy";
-import ProfilePage from "./pages/ProfilePAge";
+import ProfilePage from "./pages/ProfilePage";
 import SettingsPage from "./pages/SettingsPage";
 
 function AppRoutes() {
