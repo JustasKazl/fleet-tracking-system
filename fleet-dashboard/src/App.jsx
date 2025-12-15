@@ -11,7 +11,7 @@ import SettingsPage from "./pages/SettingsPage";
 
 function AppRoutes() {
   const { isAuthenticated, loading } = useAuth();
-
+  
   if (loading) {
     return (
       <div className="loading-page">
@@ -19,14 +19,14 @@ function AppRoutes() {
       </div>
     );
   }
-
+  
   return (
     <Routes>
       {/* Public Routes */}
       <Route path="/" element={<LandingPage />} />
       <Route path="/terms" element={<TermsOfService />} />
       <Route path="/privacy" element={<PrivacyPolicy />} />
-
+      
       {/* Protected Routes - Redirect to landing if not authenticated */}
       <Route 
         path="/dashboard" 
@@ -41,13 +41,14 @@ function AppRoutes() {
         element={isAuthenticated ? <VehicleDetailsPage /> : <Navigate to="/" replace />} 
       />
       <Route 
-        path="/settingspage" 
-        element={isAuthenticated ? <VehicleDetailsPage /> : <Navigate to="/" replace />} 
+        path="/profile" 
+        element={isAuthenticated ? <ProfilePage /> : <Navigate to="/" replace />} 
       />
       <Route 
-        path="/profilepage" 
-        element={isAuthenticated ? <VehicleDetailsPage /> : <Navigate to="/" replace />} 
+        path="/settings" 
+        element={isAuthenticated ? <SettingsPage /> : <Navigate to="/" replace />} 
       />
+      
       {/* Fallback */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
