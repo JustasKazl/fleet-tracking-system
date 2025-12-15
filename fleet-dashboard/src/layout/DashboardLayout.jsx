@@ -59,7 +59,7 @@ function DashboardLayout({ children }) {
     } else if (target === "reports") {
       showToast("Nebaigta - netrukus bus prieinamas", "warning");
     } else if (target === "settings") {
-      showToast("Nebaigta - netrukus bus prieinamas", "warning");
+      navigate("/settingspage");
     } else if (target === "logout") {
       logout();
       showToast("Atsijungėte sėkmingai", "success");
