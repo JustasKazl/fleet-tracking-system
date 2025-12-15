@@ -6,8 +6,8 @@ import VehiclesPage from "./pages/VehiclesPage";
 import VehicleDetailsPage from "./pages/VehicleDetailsPage";
 import TermsOfService from "./pages/TermsOfService";
 import PrivacyPolicy from "./pages/Privacy";
-import ProfilePage from "./page/ProfilePAge";
-import SettingsPage from "./page/SettingsPage";
+import ProfilePage from "./pages/ProfilePAge";
+import SettingsPage from "./pages/SettingsPage";
 
 function AppRoutes() {
   const { isAuthenticated, loading } = useAuth();
