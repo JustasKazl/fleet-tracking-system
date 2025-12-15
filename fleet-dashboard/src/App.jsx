@@ -6,6 +6,8 @@ import VehiclesPage from "./pages/VehiclesPage";
 import VehicleDetailsPage from "./pages/VehicleDetailsPage";
 import TermsOfService from "./pages/TermsOfService";
 import PrivacyPolicy from "./pages/Privacy";
+import ProfilePage from "./page/ProfilePAge";
+import SettingsPage from "./page/SettingsPage";
 
 function AppRoutes() {
   const { isAuthenticated, loading } = useAuth();
@@ -36,6 +38,14 @@ function AppRoutes() {
       />
       <Route 
         path="/vehicles/:id" 
+        element={isAuthenticated ? <VehicleDetailsPage /> : <Navigate to="/" replace />} 
+      />
+      <Route 
+        path="/settingspage" 
+        element={isAuthenticated ? <VehicleDetailsPage /> : <Navigate to="/" replace />} 
+      />
+      <Route 
+        path="/profilepage" 
         element={isAuthenticated ? <VehicleDetailsPage /> : <Navigate to="/" replace />} 
       />
       {/* Fallback */}
