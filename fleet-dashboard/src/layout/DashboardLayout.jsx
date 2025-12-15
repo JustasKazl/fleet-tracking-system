@@ -39,9 +39,9 @@ function DashboardLayout({ children }) {
       showToast("Atsijungėte sėkmingai", "success");
       navigate("/");
     } else if (action === "profilis") {
-      // TODO: Navigate to profile page
+      navigate("/profilepage")
     } else if (action === "nustatymai") {
-      // TODO: Navigate to settings page
+      navigate("/settingspage")
     }
   };
 
