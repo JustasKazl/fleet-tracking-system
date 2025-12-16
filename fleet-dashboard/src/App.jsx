@@ -4,8 +4,6 @@ import LandingPage from "./pages/LandingPage";
 import DashboardPage from "./pages/Dashboard";
 import VehiclesPage from "./pages/VehiclesPage";
 import VehicleDetailsPage from "./pages/VehicleDetailsPage";
-import AddVehiclePage from "./pages/AddVehiclePage";
-import EditVehiclePage from "./pages/EditVehiclePage";
 import TripsHistoryPage from "./pages/TripsHistoryPage";
 import ProfilePage from "./pages/ProfilePage";
 import SettingsPage from "./pages/SettingsPage";
