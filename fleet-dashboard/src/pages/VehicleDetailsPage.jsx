@@ -220,6 +220,16 @@ function VehicleDetailsPage() {
                     />
                 </div>
 
+                {/* Quick Actions */}
+                <div className="vehicle-actions">
+                    <button className="action-btn" onClick={() => navigate(`/vehicles/${id}/obd`)}>
+                        🔧 OBD-II Diagnostika
+                    </button>
+                    <button className="action-btn" onClick={() => navigate(`/trips`)}>
+                        📍 Kelionės
+                    </button>
+                </div>
+                
                 {/* KEY DOCUMENTS SECTION */}
                 <div className="details-section">
                     <div className="section-header">
