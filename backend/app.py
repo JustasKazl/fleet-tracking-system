@@ -1584,7 +1584,313 @@ def api_get_trips(user_id, vehicle_id):
         traceback.print_exc()
         return jsonify({"error": "Failed to fetch trips"}), 500
 
+# ---------------------- TRIP DETECTION & HISTORY (UPDATED) ----------------------
+# Replace the existing trip endpoints in main.py with these
 
+@app.route("/api/vehicles/<int:vehicle_id>/trips", methods=["GET"])
+@require_auth
+def api_get_trips(user_id, vehicle_id):
+    """
+    Get trip history for a vehicle - splits trips by 1-hour gap in received_at
+    
+    Query parameters:
+    - start_date: YYYY-MM-DD (default: 30 days ago)
+    - end_date: YYYY-MM-DD (default: today)
+    - min_distance: minimum trip distance in km (default: 0.5)
+    """
+    try:
+        conn = get_db()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # Verify vehicle ownership
+        cur.execute(
+            "SELECT id FROM vehicles WHERE id = %s AND user_id = %s",
+            (vehicle_id, user_id)
+        )
+        if not cur.fetchone():
+            cur.close()
+            conn.close()
+            return jsonify({"error": "Vehicle not found"}), 404
+        
+        # Get query parameters
+        start_date = request.args.get('start_date', 
+            (datetime.utcnow() - timedelta(days=30)).strftime('%Y-%m-%d'))
+        end_date = request.args.get('end_date', 
+            datetime.utcnow().strftime('%Y-%m-%d'))
+        min_distance = float(request.args.get('min_distance', 0.5))  # km
+        
+        # Get all telemetry data ordered by received_at
+        cur.execute("""
+            SELECT 
+                id,
+                timestamp,
+                received_at,
+                latitude,
+                longitude,
+                speed,
+                altitude
+            FROM telemetry
+            WHERE vehicle_id = %s
+                AND DATE(received_at) >= %s::date
+                AND DATE(received_at) <= %s::date
+            ORDER BY received_at ASC
+        """, (vehicle_id, start_date, end_date))
+        
+        telemetry = cur.fetchall()
+        cur.close()
+        conn.close()
+        
+        if not telemetry:
+            return jsonify([]), 200
+        
+        # Split into trips based on 1-hour gap in received_at
+        HOUR_GAP_SECONDS = 3600  # 1 hour
+        
+        trips = []
+        current_trip_points = [telemetry[0]]
+        
+        for i in range(1, len(telemetry)):
+            prev_point = telemetry[i - 1]
+            curr_point = telemetry[i]
+            
+            # Calculate time gap between received_at timestamps
+            time_gap = (curr_point['received_at'] - prev_point['received_at']).total_seconds()
+            
+            if time_gap >= HOUR_GAP_SECONDS:
+                # Gap >= 1 hour, finalize current trip and start new one
+                if len(current_trip_points) >= 2:
+                    trip = process_trip_points(current_trip_points, min_distance)
+                    if trip:
+                        trips.append(trip)
+                
+                # Start new trip
+                current_trip_points = [curr_point]
+            else:
+                # Continue current trip
+                current_trip_points.append(curr_point)
+        
+        # Process the last trip
+        if len(current_trip_points) >= 2:
+            trip = process_trip_points(current_trip_points, min_distance, is_ongoing=True)
+            if trip:
+                # Check if trip is still ongoing (last point within 1 hour of now)
+                last_received = current_trip_points[-1]['received_at']
+                time_since_last = (datetime.utcnow() - last_received).total_seconds()
+                trip['status'] = 'ongoing' if time_since_last < HOUR_GAP_SECONDS else 'completed'
+                trips.append(trip)
+        
+        # Reverse to show newest first
+        trips.reverse()
+        
+        # Add trip IDs
+        for i, trip in enumerate(trips):
+            trip['id'] = f"{trip['start_time']}_TO_{trip['end_time']}"
+        
+        return jsonify(trips), 200
+        
+    except Exception as e:
+        print(f"Error fetching trips: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": "Failed to fetch trips"}), 500
+
+
+def process_trip_points(points, min_distance, is_ongoing=False):
+    """Process a list of telemetry points into a trip object"""
+    from math import radians, cos, sin, asin, sqrt
+    
+    if len(points) < 2:
+        return None
+    
+    # Calculate total distance using Haversine formula
+    total_distance = 0
+    speeds = []
+    
+    for i in range(len(points) - 1):
+        p1 = points[i]
+        p2 = points[i + 1]
+        
+        # Skip invalid coordinates
+        if not all([p1['latitude'], p1['longitude'], p2['latitude'], p2['longitude']]):
+            continue
+        
+        lat1, lon1 = radians(float(p1['latitude'])), radians(float(p1['longitude']))
+        lat2, lon2 = radians(float(p2['latitude'])), radians(float(p2['longitude']))
+        
+        dlat = lat2 - lat1
+        dlon = lon2 - lon1
+        
+        a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
+        c = 2 * asin(sqrt(a))
+        total_distance += 6371 * c  # Earth radius in km
+        
+        if p1['speed']:
+            speeds.append(p1['speed'])
+    
+    # Add last point speed
+    if points[-1]['speed']:
+        speeds.append(points[-1]['speed'])
+    
+    # Filter by minimum distance
+    if total_distance < min_distance:
+        return None
+    
+    # Calculate statistics
+    start_point = points[0]
+    end_point = points[-1]
+    
+    duration_seconds = (end_point['received_at'] - start_point['received_at']).total_seconds()
+    duration_minutes = duration_seconds / 60
+    
+    avg_speed = sum(speeds) / len(speeds) if speeds else 0
+    max_speed = max(speeds) if speeds else 0
+    
+    return {
+        'start_time': start_point['received_at'].isoformat(),
+        'end_time': end_point['received_at'].isoformat(),
+        'start_lat': float(start_point['latitude']) if start_point['latitude'] else None,
+        'start_lon': float(start_point['longitude']) if start_point['longitude'] else None,
+        'end_lat': float(end_point['latitude']) if end_point['latitude'] else None,
+        'end_lon': float(end_point['longitude']) if end_point['longitude'] else None,
+        'distance_km': round(total_distance, 2),
+        'duration_minutes': round(duration_minutes, 1),
+        'avg_speed': round(avg_speed, 1),
+        'max_speed': round(max_speed, 1),
+        'points_count': len(points),
+        'status': 'ongoing' if is_ongoing else 'completed'
+    }
+
+
+@app.route("/api/vehicles/<int:vehicle_id>/trips/<path:trip_id>/route", methods=["GET"])
+@require_auth
+def api_get_trip_route(user_id, vehicle_id, trip_id):
+    """
+    Get detailed route points for a specific trip
+    
+    Path parameters:
+    - trip_id: format "START_ISO_TO_END_ISO"
+    """
+    try:
+        conn = get_db()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # Verify vehicle ownership
+        cur.execute(
+            "SELECT id FROM vehicles WHERE id = %s AND user_id = %s",
+            (vehicle_id, user_id)
+        )
+        if not cur.fetchone():
+            cur.close()
+            conn.close()
+            return jsonify({"error": "Vehicle not found"}), 404
+        
+        # Parse trip_id (format: "2024-12-16T08:30:00_TO_2024-12-16T09:45:00")
+        try:
+            start_time, end_time = trip_id.split('_TO_')
+        except:
+            return jsonify({"error": "Invalid trip_id format. Expected: START_ISO_TO_END_ISO"}), 400
+        
+        # Get route points
+        cur.execute("""
+            SELECT 
+                timestamp,
+                received_at,
+                latitude,
+                longitude,
+                speed,
+                altitude,
+                angle
+            FROM telemetry
+            WHERE vehicle_id = %s
+                AND received_at >= %s::timestamp
+                AND received_at <= %s::timestamp
+            ORDER BY received_at ASC
+        """, (vehicle_id, start_time, end_time))
+        
+        route = cur.fetchall()
+        
+        cur.close()
+        conn.close()
+        
+        # Convert to serializable format
+        result = []
+        for point in route:
+            result.append({
+                'timestamp': point['timestamp'].isoformat() if point['timestamp'] else None,
+                'received_at': point['received_at'].isoformat() if point['received_at'] else None,
+                'latitude': float(point['latitude']) if point['latitude'] else None,
+                'longitude': float(point['longitude']) if point['longitude'] else None,
+                'speed': point['speed'],
+                'altitude': point['altitude'],
+                'angle': point['angle']
+            })
+        
+        return jsonify(result), 200
+        
+    except Exception as e:
+        print(f"Error fetching trip route: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": "Failed to fetch trip route"}), 500
+
+
+@app.route("/api/vehicles/<int:vehicle_id>/trips/summary", methods=["GET"])
+@require_auth
+def api_get_trips_summary(user_id, vehicle_id):
+    """
+    Get summary statistics for trips in date range
+    """
+    try:
+        conn = get_db()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # Verify vehicle ownership
+        cur.execute(
+            "SELECT id FROM vehicles WHERE id = %s AND user_id = %s",
+            (vehicle_id, user_id)
+        )
+        if not cur.fetchone():
+            cur.close()
+            conn.close()
+            return jsonify({"error": "Vehicle not found"}), 404
+        
+        start_date = request.args.get('start_date', 
+            (datetime.utcnow() - timedelta(days=30)).strftime('%Y-%m-%d'))
+        end_date = request.args.get('end_date', 
+            datetime.utcnow().strftime('%Y-%m-%d'))
+        
+        # Get basic stats from telemetry
+        cur.execute("""
+            SELECT 
+                COUNT(*) as total_points,
+                MIN(received_at) as first_point,
+                MAX(received_at) as last_point,
+                AVG(speed) as avg_speed,
+                MAX(speed) as max_speed,
+                COUNT(DISTINCT DATE(received_at)) as active_days
+            FROM telemetry
+            WHERE vehicle_id = %s
+                AND DATE(received_at) >= %s::date
+                AND DATE(received_at) <= %s::date
+        """, (vehicle_id, start_date, end_date))
+        
+        stats = cur.fetchone()
+        
+        cur.close()
+        conn.close()
+        
+        return jsonify({
+            'total_points': stats['total_points'] or 0,
+            'first_point': stats['first_point'].isoformat() if stats['first_point'] else None,
+            'last_point': stats['last_point'].isoformat() if stats['last_point'] else None,
+            'avg_speed': round(float(stats['avg_speed']), 1) if stats['avg_speed'] else 0,
+            'max_speed': stats['max_speed'] or 0,
+            'active_days': stats['active_days'] or 0
+        }), 200
+        
+    except Exception as e:
+        print(f"Error fetching trips summary: {e}")
+        return jsonify({"error": "Failed to fetch summary"}), 500
 
 @app.route("/api/vehicles/<int:vehicle_id>/trips/stats", methods=["GET"])
 @require_auth
