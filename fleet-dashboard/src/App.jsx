@@ -35,8 +35,6 @@ function App() {
                     
                     {/* Vehicles */}
                     <Route path="/vehicles" element={<ProtectedRoute><VehiclesPage /></ProtectedRoute>} />
-                    <Route path="/vehicles/add" element={<ProtectedRoute><AddVehiclePage /></ProtectedRoute>} />
-                    <Route path="/vehicles/edit/:id" element={<ProtectedRoute><EditVehiclePage /></ProtectedRoute>} />
                     <Route path="/vehicles/:id" element={<ProtectedRoute><VehicleDetailsPage /></ProtectedRoute>} />
                     
                     {/* Trips */}
