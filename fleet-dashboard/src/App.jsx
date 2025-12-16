@@ -1,10 +1,11 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import LandingPage from "./pages/LandingPage";
-import DashboardPage from "./pages/Dashboard";
+import DashboardPage from "./pages/DashboardPage";
 import VehiclesPage from "./pages/VehiclesPage";
 import VehicleDetailsPage from "./pages/VehicleDetailsPage";
 import TripsHistoryPage from "./pages/TripsHistoryPage";
+import OBDDashboardPage from "./pages/OBDDashboardPage";
 import ProfilePage from "./pages/ProfilePage";
 import SettingsPage from "./pages/SettingsPage";
 
@@ -36,6 +37,7 @@ function App() {
                     {/* Vehicles */}
                     <Route path="/vehicles" element={<ProtectedRoute><VehiclesPage /></ProtectedRoute>} />
                     <Route path="/vehicles/:id" element={<ProtectedRoute><VehicleDetailsPage /></ProtectedRoute>} />
+                    <Route path="/vehicles/:id/obd" element={<ProtectedRoute><OBDDashboardPage /></ProtectedRoute>} />
                     
                     {/* Trips */}
                     <Route path="/trips" element={<ProtectedRoute><TripsHistoryPage /></ProtectedRoute>} />
