@@ -11,7 +11,7 @@ from psycopg2.extras import RealDictCursor
 from werkzeug.security import generate_password_hash, check_password_hash
 import jwt
 import json
-from flask import request, jsonify
+from math import radians, cos, sin, asin, sqrt
 
 # Configuration
 DATABASE_URL = os.environ.get('DATABASE_URL')
@@ -38,11 +38,10 @@ app = Flask(__name__)
 # PROPER CORS CONFIGURATION FOR RAILWAY
 # ═══════════════════════════════════════════════════════════════
 
-# Get frontend URL - adjust this to your actual frontend Railway URL
 FRONTEND_URLS = [
-    "https://fleet-tracking-system-production-2cd5.up.railway.app",  # Production frontend
-    "http://localhost:3000",    # Local development
-    "http://localhost:5173",    # Vite dev server
+    "https://fleet-tracking-system-production-2cd5.up.railway.app",
+    "http://localhost:3000",
+    "http://localhost:5173",
     "http://127.0.0.1:5173",
 ]
 
@@ -54,20 +53,15 @@ CORS(app,
             "allow_headers": ["Content-Type", "Authorization", "Accept"],
             "expose_headers": ["Content-Type", "Authorization"],
             "supports_credentials": True,
-            "max_age": 7200  # 2 hours
+            "max_age": 7200
         }
     },
     send_wildcard=False,
     vary_header=True
 )
 
-# ═══════════════════════════════════════════════════════════════
-# HANDLE PREFLIGHT REQUESTS EXPLICITLY
-# ═══════════════════════════════════════════════════════════════
-
 @app.before_request
 def handle_preflight():
-    """Handle CORS preflight requests"""
     if request.method == "OPTIONS":
         response = jsonify({"status": "ok"})
         response.headers.add("Access-Control-Allow-Origin", request.headers.get("Origin", "*"))
@@ -75,8 +69,6 @@ def handle_preflight():
         response.headers.add("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS")
         response.headers.add("Access-Control-Max-Age", "7200")
         return response, 200
-
-# ═════════════════════════════════════════════════════════════════
 
 # ----------------------------- DB -----------------------------
 
@@ -86,16 +78,13 @@ def get_db():
         return conn
     except psycopg2.OperationalError as e:
         print(f"❌ Database connection failed: {e}")
-        print(f"DATABASE_URL starts with: {DATABASE_URL[:20] if DATABASE_URL else 'NOT SET'}...")
         raise
 
 def init_db():
-    """Initialize PostgreSQL database with tables"""
     conn = get_db()
     cur = conn.cursor()
 
     try:
-        # Create users table
         cur.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id SERIAL PRIMARY KEY,
@@ -106,9 +95,7 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
         """)
-        print("✅ users table created/verified")
 
-        # Create vehicles table with user_id foreign key (IMEI-ONLY, minimal)
         cur.execute("""
         CREATE TABLE IF NOT EXISTS vehicles (
             id SERIAL PRIMARY KEY,
@@ -124,9 +111,7 @@ def init_db():
             FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
         );
         """)
-        print("✅ vehicles table created/verified")
 
-        # Create telemetry table for GPS data from FMB devices
         cur.execute("""
         CREATE TABLE IF NOT EXISTS telemetry (
             id BIGSERIAL PRIMARY KEY,
@@ -143,9 +128,7 @@ def init_db():
             FOREIGN KEY(vehicle_id) REFERENCES vehicles(id) ON DELETE CASCADE
         );
         """)
-        print("✅ telemetry table created/verified")
 
-        # Create documents table
         cur.execute("""
         CREATE TABLE IF NOT EXISTS documents (
             id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -158,9 +141,7 @@ def init_db():
             FOREIGN KEY(vehicle_id) REFERENCES vehicles(id) ON DELETE CASCADE
         );
         """)
-        print("✅ documents table created/verified")
 
-        # Create service_records table
         cur.execute("""
         CREATE TABLE IF NOT EXISTS service_records (
             id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -176,7 +157,6 @@ def init_db():
             FOREIGN KEY(vehicle_id) REFERENCES vehicles(id) ON DELETE CASCADE
         );
         """)
-        print("✅ service_records table created/verified")
 
         conn.commit()
         print("✅ All tables created successfully")
@@ -189,38 +169,21 @@ def init_db():
         cur.close()
 
 def run_migrations():
-    """Run database migrations to ensure schema is up to date"""
     conn = get_db()
     cur = conn.cursor()
 
     try:
-        print("🔍 Checking if vehicles table needs user_id column...")
-        
-        # Check if user_id column exists in vehicles table
         cur.execute("""
         SELECT column_name 
         FROM information_schema.columns 
         WHERE table_name = 'vehicles' AND column_name = 'user_id'
         """)
         
-        user_id_exists = cur.fetchone() is not None
-        
-        if not user_id_exists:
-            print("❌ user_id column missing from vehicles table! Adding it now...")
-            
-            # Add user_id column
+        if not cur.fetchone():
             cur.execute("ALTER TABLE vehicles ADD COLUMN user_id INTEGER;")
-            print("✅ Added user_id column")
-            
-            # Assign existing vehicles to user 1
             cur.execute("UPDATE vehicles SET user_id = 1 WHERE user_id IS NULL;")
-            print("✅ Assigned existing vehicles to user_id = 1")
-            
-            # Make user_id NOT NULL
             cur.execute("ALTER TABLE vehicles ALTER COLUMN user_id SET NOT NULL;")
-            print("✅ Set user_id as NOT NULL")
             
-            # Add foreign key constraint if it doesn't exist
             cur.execute("""
             SELECT constraint_name 
             FROM information_schema.table_constraints 
@@ -233,12 +196,11 @@ def run_migrations():
                 ADD CONSTRAINT fk_vehicles_user_id 
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
                 """)
-                print("✅ Added foreign key constraint")
             
             conn.commit()
-            print("✅ Migration completed successfully!")
+            print("✅ Migration completed!")
         else:
-            print("✅ user_id column already exists in vehicles table")
+            print("✅ user_id column already exists")
             conn.commit()
 
     except Exception as e:
@@ -251,7 +213,6 @@ def run_migrations():
 # ─────── TELTONIKA CODEC 8 PARSER ───────
 
 def calculate_crc16(data):
-    """Calculate CRC16 checksum for Codec 8"""
     crc = 0
     for byte in data:
         crc ^= byte << 8
@@ -262,31 +223,25 @@ def calculate_crc16(data):
     return crc & 0xFFFF
 
 def parse_codec8_packet(buffer):
-    """Parse Teltonika Codec 8 packet"""
     if len(buffer) < 12:
         return None
     
     offset = 0
-    
-    # Check preamble (4 bytes of 0x00)
     preamble = int.from_bytes(buffer[0:4], 'big')
     if preamble != 0:
         return None
     offset += 4
     
-    # Data length (4 bytes)
     data_length = int.from_bytes(buffer[4:8], 'big')
     if len(buffer) < 8 + data_length + 4:
         return None
     offset += 4
     
-    # Codec ID (1 byte, should be 0x08 for Codec 8)
     codec_id = buffer[offset]
     if codec_id != 0x08:
         return None
     offset += 1
     
-    # Number of records
     num_records = buffer[offset]
     offset += 1
     
@@ -296,15 +251,12 @@ def parse_codec8_packet(buffer):
         if offset + 26 > len(buffer):
             break
         
-        # Timestamp (8 bytes)
         timestamp_ms = int.from_bytes(buffer[offset:offset+8], 'big')
         offset += 8
         
-        # Priority (1 byte)
         priority = buffer[offset]
         offset += 1
         
-        # GPS element (15 bytes)
         lon_raw = int.from_bytes(buffer[offset:offset+4], 'big', signed=True)
         longitude = lon_raw / 10000000.0
         offset += 4
@@ -325,7 +277,6 @@ def parse_codec8_packet(buffer):
         speed = int.from_bytes(buffer[offset:offset+2], 'big')
         offset += 2
         
-        # IO Elements
         event_id = buffer[offset]
         offset += 1
         
@@ -333,7 +284,6 @@ def parse_codec8_packet(buffer):
         n_total = buffer[offset]
         offset += 1
         
-        # 1-byte elements
         n1 = buffer[offset]
         offset += 1
         for _ in range(n1):
@@ -342,7 +292,6 @@ def parse_codec8_packet(buffer):
             io_elements[io_id] = io_val
             offset += 2
         
-        # 2-byte elements
         n2 = buffer[offset]
         offset += 1
         for _ in range(n2):
@@ -351,7 +300,6 @@ def parse_codec8_packet(buffer):
             io_elements[io_id] = io_val
             offset += 3
         
-        # 4-byte elements
         n4 = buffer[offset]
         offset += 1
         for _ in range(n4):
@@ -360,7 +308,6 @@ def parse_codec8_packet(buffer):
             io_elements[io_id] = io_val
             offset += 5
         
-        # 8-byte elements
         n8 = buffer[offset]
         offset += 1
         for _ in range(n8):
@@ -385,12 +332,10 @@ def parse_codec8_packet(buffer):
     return records
 
 def store_telemetry(imei, records):
-    """Store telemetry records in database (IMEI-ONLY)"""
     try:
         conn = get_db()
         cur = conn.cursor()
         
-        # Find vehicle by IMEI (simple and reliable)
         cur.execute("SELECT id FROM vehicles WHERE imei = %s", (imei,))
         result = cur.fetchone()
         
@@ -401,9 +346,7 @@ def store_telemetry(imei, records):
             return False
         
         vehicle_id = result[0]
-        print(f"✅ Found vehicle ID: {vehicle_id} for IMEI: {imei}")
         
-        # Insert telemetry records
         for record in records:
             cur.execute("""
                 INSERT INTO telemetry 
@@ -421,11 +364,7 @@ def store_telemetry(imei, records):
                 json.dumps(record['io_elements'])
             ))
         
-        # Update vehicle status
-        cur.execute(
-            "UPDATE vehicles SET status = %s WHERE id = %s",
-            ('online', vehicle_id)
-        )
+        cur.execute("UPDATE vehicles SET status = %s WHERE id = %s", ('online', vehicle_id))
         
         conn.commit()
         cur.close()
@@ -440,7 +379,6 @@ def store_telemetry(imei, records):
 # ─────── TELTONIKA TCP SERVER ───────
 
 def start_tcp_server():
-    """Start TCP server to receive Teltonika data"""
     def handle_client(client_socket, addr):
         print(f"🔌 Device connected: {addr}")
         
@@ -455,84 +393,45 @@ def start_tcp_server():
                 
                 buffer += data
                 
-                # PHASE 1: IMEI Handshake
                 if imei is None:
                     if len(buffer) >= 2:
                         imei_len = int.from_bytes(buffer[0:2], 'big')
-                        print(f"📏 IMEI length: {imei_len}")
                         
                         if len(buffer) >= 2 + imei_len:
                             imei = buffer[2:2+imei_len].decode('utf-8')
                             print(f"📱 IMEI received: {imei}")
-                            
-                            # Remove IMEI from buffer
                             buffer = buffer[2+imei_len:]
-                            
-                            # Send ACK (0x01 = accepted, 0x00 = rejected)
                             client_socket.send(b'\x01')
-                            print(f"✅ IMEI handshake complete")
                             continue
                 
-                # PHASE 2: Codec 8 packets
-                while len(buffer) >= 12:  # Minimum packet size
-                    # Check preamble (4 bytes of 0x00)
+                while len(buffer) >= 12:
                     preamble = int.from_bytes(buffer[0:4], 'big')
                     if preamble != 0:
-                        print(f"❌ Invalid preamble: {hex(preamble)}")
-                        buffer = buffer[1:]  # Skip one byte and try again
+                        buffer = buffer[1:]
                         continue
                     
-                    # Get data length
                     data_length = int.from_bytes(buffer[4:8], 'big')
-                    total_packet_size = 8 + data_length + 4  # preamble + length + data + crc
+                    total_packet_size = 8 + data_length + 4
                     
-                    print(f"📦 Packet size: {total_packet_size} bytes (data: {data_length})")
-                    
-                    # Check if we have the complete packet
                     if len(buffer) < total_packet_size:
-                        print(f"⏳ Waiting for more data... (have {len(buffer)}, need {total_packet_size})")
                         break
                     
-                    # Extract packet
                     packet = buffer[:total_packet_size]
-                    
-                    # Validate CRC (optional but recommended)
-                    received_crc = int.from_bytes(packet[-4:], 'big')
-                    calculated_crc = calculate_crc16(packet[8:-4])
-                    
-                    if received_crc != calculated_crc:
-                        print(f"⚠️ CRC mismatch! Received: {hex(received_crc)}, Calculated: {hex(calculated_crc)}")
-                        # Still process it (some devices have CRC issues)
-                    
-                    # Parse the packet
                     records = parse_codec8_packet(packet)
                     
                     if records:
-                        print(f"✅ Parsed {len(records)} records from IMEI {imei}")
-                        
-                        # Store in database
                         if store_telemetry(imei, records):
-                            # Send ACK (number of records accepted)
                             ack = len(records).to_bytes(4, 'big')
                             client_socket.send(ack)
-                            print(f"📤 Sent ACK: {len(records)} records")
                         else:
-                            # Send rejection
                             client_socket.send(b'\x00\x00\x00\x00')
-                            print(f"❌ Sent rejection (storage failed)")
                     else:
-                        print(f"❌ Failed to parse packet")
-                        # Send rejection
                         client_socket.send(b'\x00\x00\x00\x00')
                     
-                    # Remove processed packet from buffer
                     buffer = buffer[total_packet_size:]
-                    print(f"🔄 Buffer remaining: {len(buffer)} bytes")
         
         except Exception as e:
             print(f"❌ Error handling client {addr}: {e}")
-            import traceback
-            traceback.print_exc()
         finally:
             client_socket.close()
             print(f"❌ Device disconnected: {addr}")
@@ -555,7 +454,6 @@ def start_tcp_server():
         finally:
             server.close()
     
-    # Start in background thread
     thread = threading.Thread(target=run_server)
     thread.daemon = True
     thread.start()
@@ -566,7 +464,6 @@ def allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def generate_token(user_id, email):
-    """Generate JWT token"""
     payload = {
         'user_id': user_id,
         'email': email,
@@ -575,29 +472,23 @@ def generate_token(user_id, email):
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
 def verify_token(token):
-    """Verify JWT token and return user_id"""
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
         return payload.get('user_id')
-    except jwt.ExpiredSignatureError:
-        return None
-    except jwt.InvalidTokenError:
+    except:
         return None
 
 def get_auth_user():
-    """Extract user_id from Authorization header"""
     auth_header = request.headers.get('Authorization')
     if not auth_header:
         return None
-    
     try:
         token = auth_header.split(' ')[1]
         return verify_token(token)
-    except (IndexError, AttributeError):
+    except:
         return None
 
 def require_auth(f):
-    """Decorator to require authentication"""
     def decorated_function(*args, **kwargs):
         user_id = get_auth_user()
         if user_id is None:
@@ -645,12 +536,7 @@ def api_register():
         return jsonify({
             "ok": True,
             "token": token,
-            "user": {
-                "id": user[0],
-                "email": user[1],
-                "name": user[2],
-                "company": user[3]
-            }
+            "user": {"id": user[0], "email": user[1], "name": user[2], "company": user[3]}
         }), 201
         
     except psycopg2.IntegrityError:
@@ -673,11 +559,7 @@ def api_login():
         conn = get_db()
         cur = conn.cursor(cursor_factory=RealDictCursor)
         
-        cur.execute("""
-            SELECT id, email, password_hash, name, company
-            FROM users WHERE email = %s
-        """, (email,))
-        
+        cur.execute("SELECT id, email, password_hash, name, company FROM users WHERE email = %s", (email,))
         user = cur.fetchone()
         cur.close()
         conn.close()
@@ -690,12 +572,7 @@ def api_login():
         return jsonify({
             "ok": True,
             "token": token,
-            "user": {
-                "id": user['id'],
-                "email": user['email'],
-                "name": user['name'],
-                "company": user['company']
-            }
+            "user": {"id": user['id'], "email": user['email'], "name": user['name'], "company": user['company']}
         }), 200
         
     except Exception as e:
@@ -708,12 +585,7 @@ def api_get_user(user_id):
     try:
         conn = get_db()
         cur = conn.cursor(cursor_factory=RealDictCursor)
-        
-        cur.execute("""
-            SELECT id, email, name, company, created_at
-            FROM users WHERE id = %s
-        """, (user_id,))
-        
+        cur.execute("SELECT id, email, name, company, created_at FROM users WHERE id = %s", (user_id,))
         user = cur.fetchone()
         cur.close()
         conn.close()
@@ -722,9 +594,7 @@ def api_get_user(user_id):
             return jsonify({"error": "User not found"}), 404
         
         return jsonify(user), 200
-        
     except Exception as e:
-        print(f"Get user error: {e}")
         return jsonify({"error": "Failed to get user"}), 500
 
 # ---------------------- API ROUTES ----------------------------
@@ -741,130 +611,68 @@ def api_health():
             "tcp_server": "running"
         })
     except Exception as e:
-        return jsonify({
-            "status": "error",
-            "message": str(e)
-        }), 500
-
-# ======= TELEMETRY WEBHOOK (FMB via HTTP POST) =========
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route("/api/telemetry/webhook", methods=["POST"])
 def fmb_webhook():
-    """
-    Webhook for FMB devices to send GPS data via HTTP POST
-    
-    Expected JSON from FMB:
-    {
-        "imei": "860123456789012",
-        "latitude": 54.6872,
-        "longitude": 25.2797,
-        "altitude": 45,
-        "angle": 180,
-        "satellites": 12,
-        "speed": 50,
-        "timestamp": "2025-12-12T10:30:45Z"
-    }
-    """
     try:
         data = request.json
-        print(f"📦 Received FMB data via webhook: {data}")
-        
-        # Extract IMEI
         imei = data.get("imei")
         if not imei:
-            print("❌ No IMEI in webhook data")
             return jsonify({"error": "No IMEI provided"}), 400
         
-        print(f"📱 IMEI: {imei}")
-        
-        # Get database connection
         conn = get_db()
         cur = conn.cursor()
         
-        try:
-            # Find vehicle by IMEI
-            cur.execute("SELECT id FROM vehicles WHERE imei = %s", (imei,))
-            result = cur.fetchone()
-            
-            if not result:
-                print(f"❌ Vehicle not found for IMEI: {imei}")
-                cur.close()
-                conn.close()
-                return jsonify({"error": f"Vehicle not found for IMEI: {imei}"}), 404
-            
-            vehicle_id = result[0]
-            print(f"✅ Found vehicle ID: {vehicle_id}")
-            
-            # Extract location data
-            latitude = data.get("latitude")
-            longitude = data.get("longitude")
-            altitude = data.get("altitude", 0)
-            angle = data.get("angle", 0)
-            satellites = data.get("satellites", 0)
-            speed = data.get("speed", 0)
-            timestamp = data.get("timestamp")
-            
-            if not timestamp:
+        cur.execute("SELECT id FROM vehicles WHERE imei = %s", (imei,))
+        result = cur.fetchone()
+        
+        if not result:
+            cur.close()
+            conn.close()
+            return jsonify({"error": f"Vehicle not found for IMEI: {imei}"}), 404
+        
+        vehicle_id = result[0]
+        
+        timestamp = data.get("timestamp")
+        if not timestamp:
+            timestamp = datetime.utcnow()
+        else:
+            try:
+                timestamp = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+            except:
                 timestamp = datetime.utcnow()
-            else:
-                try:
-                    timestamp = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
-                except:
-                    timestamp = datetime.utcnow()
-            
-            # Store in database
-            cur.execute("""
-                INSERT INTO telemetry 
-                (vehicle_id, timestamp, latitude, longitude, altitude, angle, satellites, speed, io_elements)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """, (
-                vehicle_id,
-                timestamp,
-                latitude,
-                longitude,
-                altitude,
-                angle,
-                satellites,
-                speed,
-                json.dumps(data.get("io_elements", {}))
-            ))
-            
-            # Update vehicle status to online
-            cur.execute(
-                "UPDATE vehicles SET status = %s WHERE id = %s",
-                ('online', vehicle_id)
-            )
-            
-            conn.commit()
-            cur.close()
-            conn.close()
-            
-            print(f"✅ Stored telemetry for vehicle {vehicle_id}")
-            print(f"📍 Location: {latitude}, {longitude}")
-            print(f"🚗 Speed: {speed} km/h")
-            
-            return jsonify({
-                "status": "ok",
-                "vehicle_id": vehicle_id,
-                "message": "Telemetry recorded"
-            }), 200
-            
-        except Exception as e:
-            print(f"❌ Error processing webhook: {e}")
-            conn.rollback()
-            cur.close()
-            conn.close()
-            return jsonify({"error": str(e)}), 500
-            
+        
+        cur.execute("""
+            INSERT INTO telemetry 
+            (vehicle_id, timestamp, latitude, longitude, altitude, angle, satellites, speed, io_elements)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (
+            vehicle_id,
+            timestamp,
+            data.get("latitude"),
+            data.get("longitude"),
+            data.get("altitude", 0),
+            data.get("angle", 0),
+            data.get("satellites", 0),
+            data.get("speed", 0),
+            json.dumps(data.get("io_elements", {}))
+        ))
+        
+        cur.execute("UPDATE vehicles SET status = %s WHERE id = %s", ('online', vehicle_id))
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        return jsonify({"status": "ok", "vehicle_id": vehicle_id}), 200
+        
     except Exception as e:
         print(f"❌ Webhook error: {e}")
         return jsonify({"error": str(e)}), 500
 
-# ======= TELEMETRY FROM FMB DEVICES =========
-
 @app.route("/api/telemetry/<imei>", methods=["GET"])
 def get_telemetry(imei):
-    """Get GPS data for a device (IMEI-based)"""
     try:
         limit = request.args.get('limit', default=100, type=int)
         offset = request.args.get('offset', default=0, type=int)
@@ -872,7 +680,6 @@ def get_telemetry(imei):
         conn = get_db()
         cur = conn.cursor(cursor_factory=RealDictCursor)
         
-        # Find vehicle by IMEI
         cur.execute("SELECT id FROM vehicles WHERE imei = %s", (imei,))
         result = cur.fetchone()
         
@@ -883,7 +690,6 @@ def get_telemetry(imei):
         
         vehicle_id = result['id']
         
-        # Get telemetry data
         cur.execute("""
             SELECT * FROM telemetry 
             WHERE vehicle_id = %s 
@@ -898,17 +704,14 @@ def get_telemetry(imei):
         return jsonify(rows), 200
         
     except Exception as e:
-        print(f"Get telemetry error: {e}")
         return jsonify({"error": "Failed to get telemetry"}), 500
 
 @app.route("/api/track/<imei>", methods=["GET"])
 def get_track(imei):
-    """Get last 24 hours of track data for map visualization"""
     try:
         conn = get_db()
         cur = conn.cursor(cursor_factory=RealDictCursor)
         
-        # Find vehicle by IMEI
         cur.execute("SELECT id FROM vehicles WHERE imei = %s", (imei,))
         result = cur.fetchone()
         
@@ -919,7 +722,6 @@ def get_track(imei):
         
         vehicle_id = result['id']
         
-        # Get last 24 hours
         cur.execute("""
             SELECT timestamp, latitude, longitude, speed, satellites 
             FROM telemetry 
@@ -934,7 +736,6 @@ def get_track(imei):
         return jsonify(rows), 200
         
     except Exception as e:
-        print(f"Get track error: {e}")
         return jsonify({"error": "Failed to get track"}), 500
 
 # =============== VEHICLES ===============
@@ -942,11 +743,9 @@ def get_track(imei):
 @app.route("/api/vehicles", methods=["GET"])
 @require_auth
 def api_get_vehicles(user_id):
-    """Get all vehicles for the authenticated user with latest telemetry"""
     conn = get_db()
     cur = conn.cursor(cursor_factory=RealDictCursor)
     
-    # Get all vehicles with their latest telemetry in a single query
     cur.execute("""
         SELECT 
             v.*,
@@ -974,17 +773,12 @@ def api_get_vehicles(user_id):
 @app.route("/api/vehicles", methods=["POST"])
 @require_auth
 def api_add_vehicle(user_id):
-    """Create a new vehicle for the authenticated user (IMEI-ONLY, minimal fields)"""
     data = request.json
-    print("Vehicle POST:", data)
-
     imei = data.get("imei")
     
-    # Validate required fields
     if not imei:
         return jsonify({"error": "IMEI is required"}), 400
     
-    # Validate IMEI format (typically 15 digits)
     if not imei.isdigit() or len(imei) != 15:
         return jsonify({"error": "IMEI must be 15 digits"}), 400
 
@@ -998,8 +792,7 @@ def api_add_vehicle(user_id):
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
         """, (
-            user_id,
-            imei,
+            user_id, imei,
             data.get("brand", ""),
             data.get("model", ""),
             data.get("custom_name", ""),
@@ -1014,28 +807,23 @@ def api_add_vehicle(user_id):
         conn.close()
 
         return jsonify({"ok": True, "id": new_id}), 201
-    except psycopg2.IntegrityError as e:
+    except psycopg2.IntegrityError:
         conn.rollback()
         cur.close()
         conn.close()
-        if "imei" in str(e).lower():
-            return jsonify({"error": "IMEI already registered to another vehicle"}), 409
-        return jsonify({"error": "Failed to create vehicle"}), 409
+        return jsonify({"error": "IMEI already registered"}), 409
     except Exception as e:
         conn.rollback()
         cur.close()
         conn.close()
-        print(f"Error creating vehicle: {e}")
         return jsonify({"error": "Failed to create vehicle"}), 500
 
 @app.route("/api/vehicles/<int:vehicle_id>", methods=["GET"])
 @require_auth
 def api_get_vehicle(user_id, vehicle_id):
-    """Get a specific vehicle with latest telemetry (only if it belongs to the user)"""
     conn = get_db()
     cur = conn.cursor(cursor_factory=RealDictCursor)
     
-    # Get vehicle with latest telemetry in single query
     cur.execute("""
         SELECT 
             v.*,
@@ -1067,16 +855,12 @@ def api_get_vehicle(user_id, vehicle_id):
 @app.route("/api/vehicles/<int:vehicle_id>", methods=["PUT"])
 @require_auth
 def api_update_vehicle(user_id, vehicle_id):
-    """Update a vehicle (only if it belongs to the user)"""
     data = request.json
 
     conn = get_db()
     cur = conn.cursor()
 
-    cur.execute(
-        "SELECT id FROM vehicles WHERE id = %s AND user_id = %s",
-        (vehicle_id, user_id)
-    )
+    cur.execute("SELECT id FROM vehicles WHERE id = %s AND user_id = %s", (vehicle_id, user_id))
     if not cur.fetchone():
         cur.close()
         conn.close()
@@ -1085,8 +869,7 @@ def api_update_vehicle(user_id, vehicle_id):
     try:
         cur.execute("""
             UPDATE vehicles
-            SET brand = %s, model = %s, custom_name = %s, plate = %s, 
-                status = %s, total_km = %s
+            SET brand = %s, model = %s, custom_name = %s, plate = %s, status = %s, total_km = %s
             WHERE id = %s AND user_id = %s
         """, (
             data.get("brand"),
@@ -1102,36 +885,27 @@ def api_update_vehicle(user_id, vehicle_id):
         conn.commit()
         cur.close()
         conn.close()
-
         return jsonify({"ok": True})
     except Exception as e:
         conn.rollback()
         cur.close()
         conn.close()
-        print(f"Error updating vehicle: {e}")
         return jsonify({"error": "Failed to update vehicle"}), 500
 
 @app.route("/api/vehicles/<int:vehicle_id>", methods=["DELETE"])
 @require_auth
 def api_delete_vehicle(user_id, vehicle_id):
-    """Delete a vehicle (only if it belongs to the user)"""
     conn = get_db()
     cur = conn.cursor()
     
-    cur.execute(
-        "SELECT id FROM vehicles WHERE id = %s AND user_id = %s",
-        (vehicle_id, user_id)
-    )
+    cur.execute("SELECT id FROM vehicles WHERE id = %s AND user_id = %s", (vehicle_id, user_id))
     if not cur.fetchone():
         cur.close()
         conn.close()
         return jsonify({"error": "Vehicle not found"}), 404
     
     try:
-        cur.execute(
-            "DELETE FROM vehicles WHERE id = %s AND user_id = %s",
-            (vehicle_id, user_id)
-        )
+        cur.execute("DELETE FROM vehicles WHERE id = %s AND user_id = %s", (vehicle_id, user_id))
         conn.commit()
         cur.close()
         conn.close()
@@ -1140,7 +914,6 @@ def api_delete_vehicle(user_id, vehicle_id):
         conn.rollback()
         cur.close()
         conn.close()
-        print(f"Error deleting vehicle: {e}")
         return jsonify({"error": "Failed to delete vehicle"}), 500
 
 # =============== DOCUMENT UPLOADS ===============
@@ -1148,13 +921,9 @@ def api_delete_vehicle(user_id, vehicle_id):
 @app.route("/api/vehicles/<int:vehicle_id>/documents", methods=["POST"])
 @require_auth
 def upload_document(user_id, vehicle_id):
-    """Upload a document for a vehicle (only if vehicle belongs to user)"""
     conn = get_db()
     cur = conn.cursor()
-    cur.execute(
-        "SELECT id FROM vehicles WHERE id = %s AND user_id = %s",
-        (vehicle_id, user_id)
-    )
+    cur.execute("SELECT id FROM vehicles WHERE id = %s AND user_id = %s", (vehicle_id, user_id))
     if not cur.fetchone():
         cur.close()
         conn.close()
@@ -1175,7 +944,6 @@ def upload_document(user_id, vehicle_id):
         ext = file.filename.rsplit(".", 1)[1].lower()
         filename = f"v{vehicle_id}_{int(time.time())}.{ext}"
         filepath = os.path.join(UPLOAD_FOLDER, filename)
-
         file.save(filepath)
 
         cur.execute("""
@@ -1186,36 +954,26 @@ def upload_document(user_id, vehicle_id):
         conn.commit()
         cur.close()
         conn.close()
-
         return jsonify({"ok": True, "file": filename})
     except Exception as e:
         conn.rollback()
         cur.close()
         conn.close()
-        print(f"Error uploading document: {e}")
         return jsonify({"error": "Failed to upload document"}), 500
 
 @app.route("/api/vehicles/<int:vehicle_id>/documents", methods=["GET"])
 @require_auth
 def list_documents(user_id, vehicle_id):
-    """List documents for a vehicle (only if vehicle belongs to user)"""
     conn = get_db()
     cur = conn.cursor(cursor_factory=RealDictCursor)
     
-    cur.execute(
-        "SELECT id FROM vehicles WHERE id = %s AND user_id = %s",
-        (vehicle_id, user_id)
-    )
+    cur.execute("SELECT id FROM vehicles WHERE id = %s AND user_id = %s", (vehicle_id, user_id))
     if not cur.fetchone():
         cur.close()
         conn.close()
         return jsonify({"error": "Vehicle not found"}), 404
     
-    cur.execute("""
-        SELECT * FROM documents 
-        WHERE vehicle_id = %s
-        ORDER BY uploaded_at DESC
-    """, (vehicle_id,))
+    cur.execute("SELECT * FROM documents WHERE vehicle_id = %s ORDER BY uploaded_at DESC", (vehicle_id,))
     rows = cur.fetchall()
     cur.close()
     conn.close()
@@ -1224,7 +982,6 @@ def list_documents(user_id, vehicle_id):
 @app.route("/api/documents/<int:doc_id>", methods=["DELETE"])
 @require_auth
 def delete_document(user_id, doc_id):
-    """Delete a document (only if it belongs to user's vehicle)"""
     conn = get_db()
     cur = conn.cursor(cursor_factory=RealDictCursor)
     
@@ -1250,16 +1007,12 @@ def delete_document(user_id, doc_id):
         conn.commit()
         cur.close()
         conn.close()
-
         return jsonify({"ok": True})
     except Exception as e:
         conn.rollback()
         cur.close()
         conn.close()
-        print(f"Error deleting document: {e}")
         return jsonify({"error": "Failed to delete document"}), 500
-
-# =============== FILE SERVE ===============
 
 @app.route("/uploads/<path:filename>")
 def serve_uploaded_file(filename):
@@ -1270,40 +1023,27 @@ def serve_uploaded_file(filename):
 @app.route("/api/vehicles/<int:vehicle_id>/service", methods=["GET"])
 @require_auth
 def api_get_service_records(user_id, vehicle_id):
-    """Get service records for a vehicle (only if vehicle belongs to user)"""
     conn = get_db()
     cur = conn.cursor(cursor_factory=RealDictCursor)
     
-    cur.execute(
-        "SELECT id FROM vehicles WHERE id = %s AND user_id = %s",
-        (vehicle_id, user_id)
-    )
+    cur.execute("SELECT id FROM vehicles WHERE id = %s AND user_id = %s", (vehicle_id, user_id))
     if not cur.fetchone():
         cur.close()
         conn.close()
         return jsonify({"error": "Vehicle not found"}), 404
     
-    cur.execute("""
-        SELECT * FROM service_records
-        WHERE vehicle_id = %s
-        ORDER BY performed_date DESC
-    """, (vehicle_id,))
+    cur.execute("SELECT * FROM service_records WHERE vehicle_id = %s ORDER BY performed_date DESC", (vehicle_id,))
     rows = cur.fetchall()
     cur.close()
     conn.close()
-
     return jsonify(rows)
 
 @app.route("/api/vehicles/<int:vehicle_id>/service", methods=["POST"])
 @require_auth
 def api_add_service_record(user_id, vehicle_id):
-    """Add a service record for a vehicle (only if vehicle belongs to user)"""
     conn = get_db()
     cur = conn.cursor()
-    cur.execute(
-        "SELECT id FROM vehicles WHERE id = %s AND user_id = %s",
-        (vehicle_id, user_id)
-    )
+    cur.execute("SELECT id FROM vehicles WHERE id = %s AND user_id = %s", (vehicle_id, user_id))
     if not cur.fetchone():
         cur.close()
         conn.close()
@@ -1320,20 +1060,15 @@ def api_add_service_record(user_id, vehicle_id):
     next_km = None
     next_date = None
 
-    OIL_INTERVAL = 15000
-    TIRES_INTERVAL = 30000
-    GENERAL_CHECK = 10000
-    TA_INTERVAL_DAYS = 730
-
     if service_type == "oil":
-        next_km = performed_km + OIL_INTERVAL
+        next_km = performed_km + 15000
     elif service_type == "tires":
-        next_km = performed_km + TIRES_INTERVAL
+        next_km = performed_km + 30000
     elif service_type == "general":
-        next_km = performed_km + GENERAL_CHECK
+        next_km = performed_km + 10000
     elif service_type == "ta":
         d = datetime.strptime(performed_date, "%Y-%m-%d")
-        next_date = (d + timedelta(days=TA_INTERVAL_DAYS)).strftime("%Y-%m-%d")
+        next_date = (d + timedelta(days=730)).strftime("%Y-%m-%d")
 
     try:
         cur.execute("""
@@ -1345,19 +1080,16 @@ def api_add_service_record(user_id, vehicle_id):
         conn.commit()
         cur.close()
         conn.close()
-
         return jsonify({"ok": True}), 201
     except Exception as e:
         conn.rollback()
         cur.close()
         conn.close()
-        print(f"Error creating service record: {e}")
         return jsonify({"error": "Failed to create service record"}), 500
 
 @app.route("/api/service/<int:record_id>", methods=["DELETE"])
 @require_auth
 def api_delete_service(user_id, record_id):
-    """Delete a service record (only if it belongs to user's vehicle)"""
     conn = get_db()
     cur = conn.cursor()
     
@@ -1382,7 +1114,6 @@ def api_delete_service(user_id, record_id):
         conn.rollback()
         cur.close()
         conn.close()
-        print(f"Error deleting service record: {e}")
         return jsonify({"error": "Failed to delete service record"}), 500
 
 # =============== DEBUG ===============
@@ -1406,303 +1137,15 @@ def debug_columns():
 def root():
     return "Fleet backend running on PostgreSQL with Auth + Teltonika TCP (IMEI-ONLY)", 200
 
-# ---------------------- TRIP DETECTION & HISTORY ----------------------
-
-@app.route("/api/vehicles/<int:vehicle_id>/trips", methods=["GET"])
-@require_auth
-def api_get_trips(user_id, vehicle_id):
-    """
-    Get trip history for a vehicle with optional filtering
-    
-    Query parameters:
-    - start_date: YYYY-MM-DD (default: 30 days ago)
-    - end_date: YYYY-MM-DD (default: today)
-    - min_duration: minimum trip duration in minutes (default: 5)
-    - min_distance: minimum trip distance in km (default: 1)
-    """
-    try:
-        conn = get_db()
-        cur = conn.cursor(cursor_factory=RealDictCursor)
-        
-        # Verify vehicle ownership
-        cur.execute(
-            "SELECT id FROM vehicles WHERE id = %s AND user_id = %s",
-            (vehicle_id, user_id)
-        )
-        if not cur.fetchone():
-            cur.close()
-            conn.close()
-            return jsonify({"error": "Vehicle not found"}), 404
-        
-        # Get query parameters
-        start_date = request.args.get('start_date', 
-            (datetime.utcnow() - timedelta(days=30)).strftime('%Y-%m-%d'))
-        end_date = request.args.get('end_date', 
-            datetime.utcnow().strftime('%Y-%m-%d'))
-        min_duration = int(request.args.get('min_duration', 5))  # minutes
-        min_distance = float(request.args.get('min_distance', 1.0))  # km
-        
-        # Simple approach: Get all telemetry data and process in Python
-        cur.execute("""
-            SELECT 
-                timestamp,
-                latitude,
-                longitude,
-                speed
-            FROM telemetry
-            WHERE vehicle_id = %s
-                AND timestamp >= %s::timestamp
-                AND timestamp <= %s::timestamp + interval '1 day'
-            ORDER BY timestamp ASC
-        """, (vehicle_id, start_date, end_date))
-        
-        telemetry = cur.fetchall()
-        
-        # Detect trips in Python
-        trips = []
-        current_trip = None
-        SPEED_THRESHOLD = 5  # km/h
-        STOP_TIME_THRESHOLD = 300  # 5 minutes in seconds
-        
-        for i, point in enumerate(telemetry):
-            if point['speed'] >= SPEED_THRESHOLD:
-                if current_trip is None:
-                    # Start new trip
-                    current_trip = {
-                        'start_time': point['timestamp'],
-                        'start_lat': point['latitude'],
-                        'start_lon': point['longitude'],
-                        'points': [point],
-                        'max_speed': point['speed']
-                    }
-                else:
-                    # Continue trip
-                    current_trip['points'].append(point)
-                    current_trip['max_speed'] = max(current_trip['max_speed'], point['speed'])
-            else:
-                if current_trip is not None:
-                    # Check if we should end the trip
-                    if i < len(telemetry) - 1:
-                        next_point = telemetry[i + 1]
-                        time_diff = (next_point['timestamp'] - point['timestamp']).total_seconds()
-                        
-                        if time_diff > STOP_TIME_THRESHOLD:
-                            # End trip
-                            current_trip['end_time'] = point['timestamp']
-                            current_trip['end_lat'] = point['latitude']
-                            current_trip['end_lon'] = point['longitude']
-                            
-                            # Calculate statistics
-                            duration = (current_trip['end_time'] - current_trip['start_time']).total_seconds() / 60
-                            
-                            # Calculate distance
-                            distance = 0
-                            for j in range(len(current_trip['points']) - 1):
-                                p1 = current_trip['points'][j]
-                                p2 = current_trip['points'][j + 1]
-                                
-                                # Haversine formula
-                                from math import radians, cos, sin, asin, sqrt
-                                lat1, lon1, lat2, lon2 = map(radians, [p1['latitude'], p1['longitude'], 
-                                                                        p2['latitude'], p2['longitude']])
-                                dlon = lon2 - lon1
-                                dlat = lat2 - lat1
-                                a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
-                                c = 2 * asin(sqrt(a))
-                                distance += 6371 * c  # Earth radius in km
-                            
-                            # Calculate average speed
-                            avg_speed = sum(p['speed'] for p in current_trip['points']) / len(current_trip['points'])
-                            
-                            if duration >= min_duration and distance >= min_distance:
-                                trips.append({
-                                    'start_time': current_trip['start_time'].isoformat(),
-                                    'end_time': current_trip['end_time'].isoformat(),
-                                    'start_lat': current_trip['start_lat'],
-                                    'start_lon': current_trip['start_lon'],
-                                    'end_lat': current_trip['end_lat'],
-                                    'end_lon': current_trip['end_lon'],
-                                    'duration_minutes': round(duration, 1),
-                                    'distance_km': round(distance, 2),
-                                    'avg_speed': round(avg_speed, 1),
-                                    'max_speed': round(current_trip['max_speed'], 1)
-                                })
-                            
-                            current_trip = None
-        
-        # Handle trip that didn't end
-        if current_trip is not None and len(current_trip['points']) > 0:
-            last_point = current_trip['points'][-1]
-            current_trip['end_time'] = last_point['timestamp']
-            current_trip['end_lat'] = last_point['latitude']
-            current_trip['end_lon'] = last_point['longitude']
-            
-            duration = (current_trip['end_time'] - current_trip['start_time']).total_seconds() / 60
-            
-            # Calculate distance
-            distance = 0
-            for j in range(len(current_trip['points']) - 1):
-                p1 = current_trip['points'][j]
-                p2 = current_trip['points'][j + 1]
-                
-                from math import radians, cos, sin, asin, sqrt
-                lat1, lon1, lat2, lon2 = map(radians, [p1['latitude'], p1['longitude'], 
-                                                        p2['latitude'], p2['longitude']])
-                dlon = lon2 - lon1
-                dlat = lat2 - lat1
-                a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
-                c = 2 * asin(sqrt(a))
-                distance += 6371 * c
-            
-            avg_speed = sum(p['speed'] for p in current_trip['points']) / len(current_trip['points'])
-            
-            if duration >= min_duration and distance >= min_distance:
-                trips.append({
-                    'start_time': current_trip['start_time'].isoformat(),
-                    'end_time': current_trip['end_time'].isoformat(),
-                    'start_lat': current_trip['start_lat'],
-                    'start_lon': current_trip['start_lon'],
-                    'end_lat': current_trip['end_lat'],
-                    'end_lon': current_trip['end_lon'],
-                    'duration_minutes': round(duration, 1),
-                    'distance_km': round(distance, 2),
-                    'avg_speed': round(avg_speed, 1),
-                    'max_speed': round(current_trip['max_speed'], 1)
-                })
-        
-        # Reverse to show newest first
-        trips.reverse()
-        
-        cur.close()
-        conn.close()
-        
-        return jsonify(trips), 200
-        
-    except Exception as e:
-        print(f"Error fetching trips: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({"error": "Failed to fetch trips"}), 500
-
-# ---------------------- TRIP DETECTION & HISTORY (UPDATED) ----------------------
-# Replace the existing trip endpoints in main.py with these
-
-@app.route("/api/vehicles/<int:vehicle_id>/trips", methods=["GET"])
-@require_auth
-def api_get_trips(user_id, vehicle_id):
-    """
-    Get trip history for a vehicle - splits trips by 1-hour gap in received_at
-    
-    Query parameters:
-    - start_date: YYYY-MM-DD (default: 30 days ago)
-    - end_date: YYYY-MM-DD (default: today)
-    - min_distance: minimum trip distance in km (default: 0.5)
-    """
-    try:
-        conn = get_db()
-        cur = conn.cursor(cursor_factory=RealDictCursor)
-        
-        # Verify vehicle ownership
-        cur.execute(
-            "SELECT id FROM vehicles WHERE id = %s AND user_id = %s",
-            (vehicle_id, user_id)
-        )
-        if not cur.fetchone():
-            cur.close()
-            conn.close()
-            return jsonify({"error": "Vehicle not found"}), 404
-        
-        # Get query parameters
-        start_date = request.args.get('start_date', 
-            (datetime.utcnow() - timedelta(days=30)).strftime('%Y-%m-%d'))
-        end_date = request.args.get('end_date', 
-            datetime.utcnow().strftime('%Y-%m-%d'))
-        min_distance = float(request.args.get('min_distance', 0.5))  # km
-        
-        # Get all telemetry data ordered by received_at
-        cur.execute("""
-            SELECT 
-                id,
-                timestamp,
-                received_at,
-                latitude,
-                longitude,
-                speed,
-                altitude
-            FROM telemetry
-            WHERE vehicle_id = %s
-                AND DATE(received_at) >= %s::date
-                AND DATE(received_at) <= %s::date
-            ORDER BY received_at ASC
-        """, (vehicle_id, start_date, end_date))
-        
-        telemetry = cur.fetchall()
-        cur.close()
-        conn.close()
-        
-        if not telemetry:
-            return jsonify([]), 200
-        
-        # Split into trips based on 1-hour gap in received_at
-        HOUR_GAP_SECONDS = 3600  # 1 hour
-        
-        trips = []
-        current_trip_points = [telemetry[0]]
-        
-        for i in range(1, len(telemetry)):
-            prev_point = telemetry[i - 1]
-            curr_point = telemetry[i]
-            
-            # Calculate time gap between received_at timestamps
-            time_gap = (curr_point['received_at'] - prev_point['received_at']).total_seconds()
-            
-            if time_gap >= HOUR_GAP_SECONDS:
-                # Gap >= 1 hour, finalize current trip and start new one
-                if len(current_trip_points) >= 2:
-                    trip = process_trip_points(current_trip_points, min_distance)
-                    if trip:
-                        trips.append(trip)
-                
-                # Start new trip
-                current_trip_points = [curr_point]
-            else:
-                # Continue current trip
-                current_trip_points.append(curr_point)
-        
-        # Process the last trip
-        if len(current_trip_points) >= 2:
-            trip = process_trip_points(current_trip_points, min_distance, is_ongoing=True)
-            if trip:
-                # Check if trip is still ongoing (last point within 1 hour of now)
-                last_received = current_trip_points[-1]['received_at']
-                time_since_last = (datetime.utcnow() - last_received).total_seconds()
-                trip['status'] = 'ongoing' if time_since_last < HOUR_GAP_SECONDS else 'completed'
-                trips.append(trip)
-        
-        # Reverse to show newest first
-        trips.reverse()
-        
-        # Add trip IDs
-        for i, trip in enumerate(trips):
-            trip['id'] = f"{trip['start_time']}_TO_{trip['end_time']}"
-        
-        return jsonify(trips), 200
-        
-    except Exception as e:
-        print(f"Error fetching trips: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({"error": "Failed to fetch trips"}), 500
-
+# ══════════════════════════════════════════════════════════════════════════════
+# TRIP DETECTION & HISTORY (1-HOUR GAP BASED)
+# ══════════════════════════════════════════════════════════════════════════════
 
 def process_trip_points(points, min_distance, is_ongoing=False):
     """Process a list of telemetry points into a trip object"""
-    from math import radians, cos, sin, asin, sqrt
-    
     if len(points) < 2:
         return None
     
-    # Calculate total distance using Haversine formula
     total_distance = 0
     speeds = []
     
@@ -1710,7 +1153,6 @@ def process_trip_points(points, min_distance, is_ongoing=False):
         p1 = points[i]
         p2 = points[i + 1]
         
-        # Skip invalid coordinates
         if not all([p1['latitude'], p1['longitude'], p2['latitude'], p2['longitude']]):
             continue
         
@@ -1722,20 +1164,17 @@ def process_trip_points(points, min_distance, is_ongoing=False):
         
         a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
         c = 2 * asin(sqrt(a))
-        total_distance += 6371 * c  # Earth radius in km
+        total_distance += 6371 * c
         
         if p1['speed']:
             speeds.append(p1['speed'])
     
-    # Add last point speed
     if points[-1]['speed']:
         speeds.append(points[-1]['speed'])
     
-    # Filter by minimum distance
     if total_distance < min_distance:
         return None
     
-    # Calculate statistics
     start_point = points[0]
     end_point = points[-1]
     
@@ -1761,45 +1200,103 @@ def process_trip_points(points, min_distance, is_ongoing=False):
     }
 
 
-@app.route("/api/vehicles/<int:vehicle_id>/trips/<path:trip_id>/route", methods=["GET"])
+@app.route("/api/vehicles/<int:vehicle_id>/trips", methods=["GET"])
 @require_auth
-def api_get_trip_route(user_id, vehicle_id, trip_id):
-    """
-    Get detailed route points for a specific trip
-    
-    Path parameters:
-    - trip_id: format "START_ISO_TO_END_ISO"
-    """
+def api_get_vehicle_trips(user_id, vehicle_id):
+    """Get trip history - splits trips by 1-hour gap in received_at"""
     try:
         conn = get_db()
         cur = conn.cursor(cursor_factory=RealDictCursor)
         
-        # Verify vehicle ownership
-        cur.execute(
-            "SELECT id FROM vehicles WHERE id = %s AND user_id = %s",
-            (vehicle_id, user_id)
-        )
+        cur.execute("SELECT id FROM vehicles WHERE id = %s AND user_id = %s", (vehicle_id, user_id))
         if not cur.fetchone():
             cur.close()
             conn.close()
             return jsonify({"error": "Vehicle not found"}), 404
         
-        # Parse trip_id (format: "2024-12-16T08:30:00_TO_2024-12-16T09:45:00")
+        start_date = request.args.get('start_date', (datetime.utcnow() - timedelta(days=30)).strftime('%Y-%m-%d'))
+        end_date = request.args.get('end_date', datetime.utcnow().strftime('%Y-%m-%d'))
+        min_distance = float(request.args.get('min_distance', 0.5))
+        
+        cur.execute("""
+            SELECT id, timestamp, received_at, latitude, longitude, speed, altitude
+            FROM telemetry
+            WHERE vehicle_id = %s
+                AND DATE(received_at) >= %s::date
+                AND DATE(received_at) <= %s::date
+            ORDER BY received_at ASC
+        """, (vehicle_id, start_date, end_date))
+        
+        telemetry = cur.fetchall()
+        cur.close()
+        conn.close()
+        
+        if not telemetry:
+            return jsonify([]), 200
+        
+        HOUR_GAP_SECONDS = 3600
+        
+        trips = []
+        current_trip_points = [telemetry[0]]
+        
+        for i in range(1, len(telemetry)):
+            prev_point = telemetry[i - 1]
+            curr_point = telemetry[i]
+            
+            time_gap = (curr_point['received_at'] - prev_point['received_at']).total_seconds()
+            
+            if time_gap >= HOUR_GAP_SECONDS:
+                if len(current_trip_points) >= 2:
+                    trip = process_trip_points(current_trip_points, min_distance)
+                    if trip:
+                        trips.append(trip)
+                current_trip_points = [curr_point]
+            else:
+                current_trip_points.append(curr_point)
+        
+        if len(current_trip_points) >= 2:
+            trip = process_trip_points(current_trip_points, min_distance, is_ongoing=True)
+            if trip:
+                last_received = current_trip_points[-1]['received_at']
+                time_since_last = (datetime.utcnow() - last_received).total_seconds()
+                trip['status'] = 'ongoing' if time_since_last < HOUR_GAP_SECONDS else 'completed'
+                trips.append(trip)
+        
+        trips.reverse()
+        
+        for trip in trips:
+            trip['id'] = f"{trip['start_time']}_TO_{trip['end_time']}"
+        
+        return jsonify(trips), 200
+        
+    except Exception as e:
+        print(f"Error fetching trips: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": "Failed to fetch trips"}), 500
+
+
+@app.route("/api/vehicles/<int:vehicle_id>/trips/<path:trip_id>/route", methods=["GET"])
+@require_auth
+def api_get_vehicle_trip_route(user_id, vehicle_id, trip_id):
+    """Get detailed route points for a specific trip"""
+    try:
+        conn = get_db()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        cur.execute("SELECT id FROM vehicles WHERE id = %s AND user_id = %s", (vehicle_id, user_id))
+        if not cur.fetchone():
+            cur.close()
+            conn.close()
+            return jsonify({"error": "Vehicle not found"}), 404
+        
         try:
             start_time, end_time = trip_id.split('_TO_')
         except:
-            return jsonify({"error": "Invalid trip_id format. Expected: START_ISO_TO_END_ISO"}), 400
+            return jsonify({"error": "Invalid trip_id format"}), 400
         
-        # Get route points
         cur.execute("""
-            SELECT 
-                timestamp,
-                received_at,
-                latitude,
-                longitude,
-                speed,
-                altitude,
-                angle
+            SELECT timestamp, received_at, latitude, longitude, speed, altitude, angle
             FROM telemetry
             WHERE vehicle_id = %s
                 AND received_at >= %s::timestamp
@@ -1808,11 +1305,9 @@ def api_get_trip_route(user_id, vehicle_id, trip_id):
         """, (vehicle_id, start_time, end_time))
         
         route = cur.fetchall()
-        
         cur.close()
         conn.close()
         
-        # Convert to serializable format
         result = []
         for point in route:
             result.append({
@@ -1829,37 +1324,26 @@ def api_get_trip_route(user_id, vehicle_id, trip_id):
         
     except Exception as e:
         print(f"Error fetching trip route: {e}")
-        import traceback
-        traceback.print_exc()
         return jsonify({"error": "Failed to fetch trip route"}), 500
 
 
 @app.route("/api/vehicles/<int:vehicle_id>/trips/summary", methods=["GET"])
 @require_auth
-def api_get_trips_summary(user_id, vehicle_id):
-    """
-    Get summary statistics for trips in date range
-    """
+def api_get_vehicle_trips_summary(user_id, vehicle_id):
+    """Get summary statistics for trips"""
     try:
         conn = get_db()
         cur = conn.cursor(cursor_factory=RealDictCursor)
         
-        # Verify vehicle ownership
-        cur.execute(
-            "SELECT id FROM vehicles WHERE id = %s AND user_id = %s",
-            (vehicle_id, user_id)
-        )
+        cur.execute("SELECT id FROM vehicles WHERE id = %s AND user_id = %s", (vehicle_id, user_id))
         if not cur.fetchone():
             cur.close()
             conn.close()
             return jsonify({"error": "Vehicle not found"}), 404
         
-        start_date = request.args.get('start_date', 
-            (datetime.utcnow() - timedelta(days=30)).strftime('%Y-%m-%d'))
-        end_date = request.args.get('end_date', 
-            datetime.utcnow().strftime('%Y-%m-%d'))
+        start_date = request.args.get('start_date', (datetime.utcnow() - timedelta(days=30)).strftime('%Y-%m-%d'))
+        end_date = request.args.get('end_date', datetime.utcnow().strftime('%Y-%m-%d'))
         
-        # Get basic stats from telemetry
         cur.execute("""
             SELECT 
                 COUNT(*) as total_points,
@@ -1875,7 +1359,6 @@ def api_get_trips_summary(user_id, vehicle_id):
         """, (vehicle_id, start_date, end_date))
         
         stats = cur.fetchone()
-        
         cur.close()
         conn.close()
         
@@ -1891,162 +1374,6 @@ def api_get_trips_summary(user_id, vehicle_id):
     except Exception as e:
         print(f"Error fetching trips summary: {e}")
         return jsonify({"error": "Failed to fetch summary"}), 500
-
-@app.route("/api/vehicles/<int:vehicle_id>/trips/stats", methods=["GET"])
-@require_auth
-def api_get_trip_stats(user_id, vehicle_id):
-    """
-    Get trip statistics for a vehicle
-    
-    Query parameters:
-    - start_date: YYYY-MM-DD (default: 30 days ago)
-    - end_date: YYYY-MM-DD (default: today)
-    """
-    try:
-        conn = get_db()
-        cur = conn.cursor(cursor_factory=RealDictCursor)
-        
-        # Verify vehicle ownership
-        cur.execute(
-            "SELECT id FROM vehicles WHERE id = %s AND user_id = %s",
-            (vehicle_id, user_id)
-        )
-        if not cur.fetchone():
-            cur.close()
-            conn.close()
-            return jsonify({"error": "Vehicle not found"}), 404
-        
-        # Get query parameters
-        start_date = request.args.get('start_date', 
-            (datetime.utcnow() - timedelta(days=30)).strftime('%Y-%m-%d'))
-        end_date = request.args.get('end_date', 
-            datetime.utcnow().strftime('%Y-%m-%d'))
-        
-        # Get statistics
-        cur.execute("""
-            SELECT 
-                COUNT(*) as total_trips,
-                SUM(
-                    6371 * acos(
-                        cos(radians(t1.latitude)) * 
-                        cos(radians(t2.latitude)) * 
-                        cos(radians(t2.longitude) - radians(t1.longitude)) + 
-                        sin(radians(t1.latitude)) * 
-                        sin(radians(t2.latitude))
-                    )
-                ) as total_distance_km,
-                AVG(speed) as avg_speed,
-                MAX(speed) as max_speed,
-                COUNT(DISTINCT DATE(timestamp)) as days_with_activity,
-                SUM(CASE WHEN speed > 90 THEN 1 ELSE 0 END) as speeding_events
-            FROM telemetry t1
-            JOIN telemetry t2 ON t2.id = t1.id + 1
-            WHERE t1.vehicle_id = %s
-                AND t1.timestamp >= %s::timestamp
-                AND t1.timestamp <= %s::timestamp + interval '1 day'
-        """, (vehicle_id, start_date, end_date))
-        
-        stats = cur.fetchone()
-        
-        # Get daily breakdown
-        cur.execute("""
-            SELECT 
-                DATE(timestamp) as date,
-                COUNT(*) as points,
-                SUM(
-                    6371 * acos(
-                        cos(radians(t1.latitude)) * 
-                        cos(radians(t2.latitude)) * 
-                        cos(radians(t2.longitude) - radians(t1.longitude)) + 
-                        sin(radians(t1.latitude)) * 
-                        sin(radians(t2.latitude))
-                    )
-                ) as distance_km,
-                AVG(speed) as avg_speed,
-                MAX(speed) as max_speed
-            FROM telemetry t1
-            JOIN telemetry t2 ON t2.id = t1.id + 1
-            WHERE t1.vehicle_id = %s
-                AND t1.timestamp >= %s::timestamp
-                AND t1.timestamp <= %s::timestamp + interval '1 day'
-            GROUP BY DATE(timestamp)
-            ORDER BY date DESC
-        """, (vehicle_id, start_date, end_date))
-        
-        daily_stats = cur.fetchall()
-        
-        cur.close()
-        conn.close()
-        
-        return jsonify({
-            "summary": stats,
-            "daily": daily_stats
-        }), 200
-        
-    except Exception as e:
-        print(f"Error fetching trip stats: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({"error": "Failed to fetch trip statistics"}), 500
-
-
-@app.route("/api/vehicles/<int:vehicle_id>/trips/<trip_id>/route", methods=["GET"])
-@require_auth
-def api_get_trip_route(user_id, vehicle_id, trip_id):
-    """
-    Get detailed route for a specific trip
-    
-    Path parameters:
-    - trip_id: format "START_TIMESTAMP-END_TIMESTAMP" (ISO 8601)
-    """
-    try:
-        conn = get_db()
-        cur = conn.cursor(cursor_factory=RealDictCursor)
-        
-        # Verify vehicle ownership
-        cur.execute(
-            "SELECT id FROM vehicles WHERE id = %s AND user_id = %s",
-            (vehicle_id, user_id)
-        )
-        if not cur.fetchone():
-            cur.close()
-            conn.close()
-            return jsonify({"error": "Vehicle not found"}), 404
-        
-        # Parse trip_id
-        try:
-            start_time, end_time = trip_id.split('_TO_')
-        except:
-            return jsonify({"error": "Invalid trip_id format"}), 400
-        
-        # Get route points
-        cur.execute("""
-            SELECT 
-                timestamp,
-                latitude,
-                longitude,
-                speed,
-                altitude,
-                satellites,
-                angle
-            FROM telemetry
-            WHERE vehicle_id = %s
-                AND timestamp >= %s::timestamp
-                AND timestamp <= %s::timestamp
-            ORDER BY timestamp ASC
-        """, (vehicle_id, start_time, end_time))
-        
-        route = cur.fetchall()
-        
-        cur.close()
-        conn.close()
-        
-        return jsonify(route), 200
-        
-    except Exception as e:
-        print(f"Error fetching trip route: {e}")
-        return jsonify({"error": "Failed to fetch trip route"}), 500
-
 
 
 # --------------------- MAIN ------------------------
@@ -2070,8 +1397,6 @@ if __name__ == "__main__":
         print("=" * 60)
         raise
     
-    # Flask runs on PORT env var (Railway sets this to 8080)
-    # TCP server runs separately on port 5055
     flask_port = int(os.environ.get("PORT", 8080))
     print(f"\n🎯 Starting Flask HTTP server on port {flask_port}...")
     print(f"📡 Teltonika TCP server on port 5055 (separate)\n")
