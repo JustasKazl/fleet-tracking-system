@@ -14,7 +14,7 @@ const OBD_PARAMS = {
   engine_load: { label: "Variklio apkrova", unit: "%", icon: "⚡", color: "#8b5cf6", min: 0, max: 100 },
   intake_air_temp: { label: "Įsiurbimo oro temp.", unit: "°C", icon: "🌬️", color: "#06b6d4", min: -40, max: 80 },
   maf: { label: "MAF", unit: "g/s", icon: "💨", color: "#10b981", min: 0, max: 500 },
-  throttle: { label: "Droselis", unit: "%", icon: "🎚️", color: "#f43f5e", min: 0, max: 100 },
+  throttle: { label: "Pedalo padėtis", unit: "%", icon: "🎚️", color: "#f43f5e", min: 0, max: 100 },
   fuel_level: { label: "Kuro lygis", unit: "%", icon: "⛽", color: "#eab308", min: 0, max: 100 },
   battery_voltage: { label: "Akumuliatorius", unit: "V", icon: "🔋", color: "#22c55e", min: 10, max: 15 },
   fuel_rate: { label: "Kuro sąnaudos", unit: "l/100km", icon: "📊", color: "#ec4899", min: 0, max: 30 },
