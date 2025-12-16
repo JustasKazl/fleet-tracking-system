@@ -18,21 +18,7 @@ function ProtectedRoute({ children }) {
     }
 
     if (!isAuthenticated) {
-        return <Navigate to="/login" replace />;
-    }
-
-    return children;
-}
-
-function PublicRoute({ children }) {
-    const { isAuthenticated, loading } = useAuth();
-
-    if (loading) {
-        return <div className="loading-page">Kraunama...</div>;
-    }
-
-    if (isAuthenticated) {
-        return <Navigate to="/dashboard" replace />;
+        return <Navigate to="/" replace />;
     }
 
     return children;
@@ -43,8 +29,8 @@ function App() {
         <BrowserRouter>
             <AuthProvider>
                 <Routes>
-                    {/* Public Routes */}
-                    <Route path="/" element={<PublicRoute><LandingPage /></PublicRoute>} />
+                    {/* Public - Landing with login/register popups */}
+                    <Route path="/" element={<LandingPage />} />
 
                     {/* Protected Routes */}
                     <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
