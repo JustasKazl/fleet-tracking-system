@@ -4,6 +4,7 @@ import DashboardLayout from "../layout/DashboardLayout";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import API_BASE_URL from "../api";
+import '../styles/lobd-dashboard.css';
 
 // OBD-II Parameter definitions
 const OBD_PARAMS = {
