@@ -580,29 +580,26 @@ function OBDPage() {
                             <div className="fuel-gauge-container">
                                 <FuelGauge value={fuelEfficiency?.avg} optimal={8} max={20} />
                             </div>
-                            <div className="fuel-avg-stats">
-                                <div className="fuel-avg-main">
-                                    <span className="fuel-avg-value">{fuelEfficiency?.avg?.toFixed(1) || '-'}</span>
-                                    <span className="fuel-avg-unit">L/100km vid.</span>
+                            <div className="fuel-comparison">
+                                <div className="fuel-comp-item">
+                                    <span className="comp-label">Min</span>
+                                    <span className="comp-value">{fuelEfficiency?.min?.toFixed(1) || '-'}</span>
+                                    <span className="comp-unit">L/100km</span>
                                 </div>
-                                <div className="fuel-avg-range">
-                                    <span>Min: {fuelEfficiency?.min?.toFixed(1) || '-'}</span>
-                                    <span>Max: {fuelEfficiency?.max?.toFixed(1) || '-'}</span>
+                                <div className="fuel-comp-divider">vs</div>
+                                <div className="fuel-comp-item">
+                                    <span className="comp-label">Max</span>
+                                    <span className="comp-value actual">{fuelEfficiency?.max?.toFixed(1) || '-'}</span>
+                                    <span className="comp-unit">L/100km</span>
                                 </div>
                             </div>
                             <div className="fuel-stats">
                                 <div className="fuel-stat"><span>📏 Nuvažiuota</span><span>{tripStats?.distance?.toFixed(1) || '-'} km</span></div>
-                                <div className="fuel-stat"><span>⛽ Kuro sunaudota</span><span>{tripStats?.fuelUsedPercent?.toFixed(0) || '-'}%</span></div>
-                                <div className="fuel-stat"><span>🚗 Judėjimo laikas</span><span>{tripStats?.movingTime || '-'} min</span></div>
+                                <div className="fuel-stat"><span>⛽ Sunaudota</span><span>{tripStats?.fuelUsedPercent?.toFixed(0) || '-'}%</span></div>
+                                <div className="fuel-stat"><span>🚗 Judėjimas</span><span>{tripStats?.movingTime || '-'} min</span></div>
                                 <div className="fuel-stat"><span>⏸️ Tuščia eiga</span><span>{tripStats?.idleTime || '-'} min</span></div>
                                 <div className="fuel-stat"><span>🏎️ Max greitis</span><span>{tripStats?.maxSpeed || '-'} km/h</span></div>
                             </div>
-                            {tripStats?.actualConsumption && (
-                                <div className="fuel-calculated">
-                                    <span className="fuel-calc-label">Apskaičiuota pagal kuro lygį:</span>
-                                    <span className="fuel-calc-value">{tripStats.actualConsumption.toFixed(1)} L/100km</span>
-                                </div>
-                            )}
                         </div>
                     </div>
 
