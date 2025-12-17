@@ -164,15 +164,88 @@ function OBDPage() {
 
     function calcDriving(data) {
         if (data.length < 2) return null;
-        let ha = 0, hb = 0, hr = 0, os = 0, hl = 0, idle = 0;
+        
+        let hardAccelerations = 0;  // Sudden speed increase
+        let hardBraking = 0;        // Sudden speed decrease
+        let highRpmEvents = 0;      // Very high RPM (>5000)
+        let overspeedEvents = 0;    // Over 130 km/h
+        let highLoadEvents = 0;     // Engine load > 85%
+        let idlePoints = 0;         // Stationary with engine running
+        let movingPoints = 0;       // Actually driving
+        
         for (let i = 1; i < data.length; i++) {
-            const p = data[i-1], c = data[i];
-            if (c.speed_kmh !== undefined && p.speed_kmh !== undefined) { const ch = c.speed_kmh - p.speed_kmh; if (ch > 15) ha++; if (ch < -20) hb++; }
-            if (c.rpm > 4500) hr++; if (c.speed_kmh > 130) os++; if (c.engine_load > 80) hl++;
-            if (c.speed_kmh === 0 && c.rpm > 0) idle++;
+            const prev = data[i - 1];
+            const curr = data[i];
+            
+            // Calculate time delta to avoid counting slow changes
+            const timeDelta = curr.timestamp - prev.timestamp;
+            const seconds = timeDelta / 1000;
+            
+            // Skip if too much time between points (different trip)
+            if (seconds > 60) continue;
+            
+            // Hard acceleration: >20 km/h gain in short time
+            if (curr.speed_kmh !== undefined && prev.speed_kmh !== undefined) {
+                const speedChange = curr.speed_kmh - prev.speed_kmh;
+                
+                // Only count as hard if rapid change (within a few seconds)
+                if (seconds < 10) {
+                    if (speedChange > 20) hardAccelerations++;
+                    if (speedChange < -25) hardBraking++;
+                }
+            }
+            
+            // High RPM: only count very high (>5000, not 4500)
+            if (curr.rpm > 5000) highRpmEvents++;
+            
+            // Overspeed: >140 km/h (130 is normal on highways)
+            if (curr.speed_kmh > 140) overspeedEvents++;
+            
+            // High load: >85% sustained
+            if (curr.engine_load > 85) highLoadEvents++;
+            
+            // Idle vs moving
+            if (curr.speed_kmh !== undefined) {
+                if (curr.speed_kmh < 5 && curr.rpm > 0) {
+                    idlePoints++;
+                } else if (curr.speed_kmh >= 5) {
+                    movingPoints++;
+                }
+            }
         }
-        const eco = Math.max(0, Math.round(100 - Math.min(100, ((ha+hb+hr+hl)/data.length)*1000)));
-        return { eco, aggressive: 100-eco, ha, hb, hr, os, hl, idle: Math.round((idle/data.length)*100) };
+        
+        const totalPoints = movingPoints + idlePoints || 1;
+        
+        // Calculate eco score - more forgiving formula
+        // Base score of 100, subtract penalties
+        let ecoScore = 100;
+        
+        // Penalties (per 100 data points, max 50 points total penalty)
+        const pointsPer100 = 100 / Math.max(totalPoints, 1);
+        
+        ecoScore -= Math.min(15, hardAccelerations * pointsPer100 * 0.5);   // Max -15 for hard accelerations
+        ecoScore -= Math.min(15, hardBraking * pointsPer100 * 0.5);         // Max -15 for hard braking  
+        ecoScore -= Math.min(10, highRpmEvents * pointsPer100 * 0.2);       // Max -10 for high RPM
+        ecoScore -= Math.min(10, highLoadEvents * pointsPer100 * 0.1);      // Max -10 for high load
+        
+        // Overspeed is informational, doesn't heavily affect eco score
+        // (you can drive efficiently at high speed)
+        
+        ecoScore = Math.max(0, Math.min(100, Math.round(ecoScore)));
+        
+        // Calculate idle percentage
+        const idlePercent = Math.round((idlePoints / totalPoints) * 100);
+        
+        return {
+            eco: ecoScore,
+            aggressive: 100 - ecoScore,
+            ha: hardAccelerations,
+            hb: hardBraking,
+            hr: highRpmEvents,
+            os: overspeedEvents,
+            hl: highLoadEvents,
+            idle: idlePercent
+        };
     }
 
     function calcFuel(data) {
