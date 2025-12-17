@@ -1,3 +1,9 @@
+// =============================================
+// ALERTS PAGE - Simplified with severity filter only
+// Fleet Tracking Dashboard
+// File: src/pages/AlertsPage.jsx
+// =============================================
+
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '../layout/DashboardLayout';
@@ -78,6 +84,46 @@ function AlertsPage() {
         }
     }
 
+    async function handleDelete(alertId) {
+        if (!confirm('Ar tikrai norite ištrinti šį įspėjimą?')) return;
+        
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/alerts/${alertId}`, {
+                method: 'DELETE',
+                headers: { Authorization: `Bearer ${token}` }
+            });
+
+            if (res.ok) {
+                showToast('Įspėjimas ištrintas', 'success');
+                loadAlerts();
+                loadStats();
+            } else {
+                showToast('Nepavyko ištrinti', 'error');
+            }
+        } catch (err) {
+            showToast('Klaida', 'error');
+        }
+    }
+
+    async function handleDeleteAll() {
+        if (!confirm('Ar tikrai norite ištrinti VISUS įspėjimus? Šis veiksmas negrįžtamas.')) return;
+        
+        try {
+            // Delete all alerts one by one
+            for (const alert of alerts) {
+                await fetch(`${API_BASE_URL}/api/alerts/${alert.id}`, {
+                    method: 'DELETE',
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+            }
+            showToast('Visi įspėjimai ištrinti', 'success');
+            loadAlerts();
+            loadStats();
+        } catch (err) {
+            showToast('Klaida', 'error');
+        }
+    }
+
     function getAlertIcon(type) {
         const icons = {
             speed: '🚗', geofence: '📍', maintenance: '🔧', document: '📄',
@@ -111,6 +157,15 @@ function AlertsPage() {
                             Valdykite visus sistemos įspėjimus
                         </p>
                     </div>
+                    {alerts.length > 0 && (
+                        <button 
+                            className="btn-ghost" 
+                            onClick={handleDeleteAll}
+                            style={{ color: 'var(--bad)' }}
+                        >
+                            🗑️ Ištrinti visus
+                        </button>
+                    )}
                 </div>
 
                 {/* Stats */}
@@ -241,21 +296,23 @@ function AlertsPage() {
                                                         ✓
                                                     </button>
                                                 )}
+                                                {alert.status !== 'resolved' && (
+                                                    <button 
+                                                        className="btn-ghost"
+                                                        onClick={() => handleAction(alert.id, 'resolve')}
+                                                        title="Išspręsti"
+                                                        style={{ padding: '6px 10px', fontSize: '12px' }}
+                                                    >
+                                                        ✅
+                                                    </button>
+                                                )}
                                                 <button 
                                                     className="btn-ghost"
-                                                    onClick={() => handleAction(alert.id, 'resolve')}
-                                                    title="Išspręsti"
-                                                    style={{ padding: '6px 10px', fontSize: '12px' }}
-                                                >
-                                                    ✅
-                                                </button>
-                                                <button 
-                                                    className="btn-ghost"
-                                                    onClick={() => handleAction(alert.id, 'dismiss')}
-                                                    title="Atmesti"
+                                                    onClick={() => handleDelete(alert.id)}
+                                                    title="Ištrinti"
                                                     style={{ padding: '6px 10px', fontSize: '12px', color: 'var(--bad)' }}
                                                 >
-                                                    ✕
+                                                    🗑️
                                                 </button>
                                             </div>
                                         </td>
