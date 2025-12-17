@@ -392,27 +392,6 @@ function Dashboard() {
                     </div>
                 </div>
             </div>
-
-            {/* QUICK ACTIONS */}
-            <div className="card" style={{ marginTop: '20px' }}>
-                <div className="card-header">
-                    <div className="card-title">⚡ Greiti veiksmai</div>
-                </div>
-                <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                    <button className="btn-primary" onClick={() => navigate('/vehicles')}>
-                        🚗 Automobiliai
-                    </button>
-                    <button className="btn-ghost" onClick={() => navigate('/trips')}>
-                        📍 Kelionės
-                    </button>
-                    <button className="btn-ghost" onClick={() => navigate('/alerts')}>
-                        🔔 Įspėjimai
-                    </button>
-                    <button className="btn-ghost" onClick={() => navigate('/settings')}>
-                        ⚙️ Nustatymai
-                    </button>
-                </div>
-            </div>
         </DashboardLayout>
     );
 }
