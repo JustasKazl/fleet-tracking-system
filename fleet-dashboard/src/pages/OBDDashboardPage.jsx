@@ -538,6 +538,75 @@ function FuelGauge({ value, optimal = 8, max = 20 }) {
 function OBDChart({data, paramName, paramConfig, timeRange}) {
     const canvasRef = useRef(null);
     const containerRef = useRef(null);
+    const [viewState, setViewState] = useState({ zoom: 1, panX: 0 });
+    const isDragging = useRef(false);
+    const dragStart = useRef({ x: 0, panX: 0 });
+    
+    // Reset view when timeRange or param changes
+    useEffect(() => {
+        setViewState({ zoom: 1, panX: 0 });
+    }, [timeRange, paramName]);
+    
+    // Handle mouse wheel zoom
+    const handleWheel = (e) => {
+        e.preventDefault();
+        const rect = containerRef.current.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const chartWidth = rect.width - 70; // Account for padding
+        const mouseRatio = (mouseX - 50) / chartWidth; // Where on chart (0-1)
+        
+        setViewState(prev => {
+            const zoomDelta = e.deltaY > 0 ? 0.9 : 1.1; // Zoom out/in
+            const newZoom = Math.max(1, Math.min(20, prev.zoom * zoomDelta));
+            
+            if (newZoom === 1) {
+                return { zoom: 1, panX: 0 };
+            }
+            
+            // Adjust pan to zoom toward mouse position
+            const zoomChange = newZoom / prev.zoom;
+            const newPanX = mouseRatio - (mouseRatio - prev.panX) * zoomChange;
+            
+            // Clamp pan to valid range
+            const maxPan = 1 - 1/newZoom;
+            const clampedPanX = Math.max(0, Math.min(maxPan, newPanX));
+            
+            return { zoom: newZoom, panX: clampedPanX };
+        });
+    };
+    
+    // Handle drag to pan
+    const handleMouseDown = (e) => {
+        if (viewState.zoom <= 1) return;
+        isDragging.current = true;
+        dragStart.current = { x: e.clientX, panX: viewState.panX };
+        containerRef.current.style.cursor = 'grabbing';
+    };
+    
+    const handleMouseMove = (e) => {
+        if (!isDragging.current) return;
+        const rect = containerRef.current.getBoundingClientRect();
+        const chartWidth = rect.width - 70;
+        const dx = e.clientX - dragStart.current.x;
+        const panDelta = -dx / (chartWidth * viewState.zoom);
+        
+        const maxPan = 1 - 1/viewState.zoom;
+        const newPanX = Math.max(0, Math.min(maxPan, dragStart.current.panX + panDelta));
+        
+        setViewState(prev => ({ ...prev, panX: newPanX }));
+    };
+    
+    const handleMouseUp = () => {
+        isDragging.current = false;
+        if (containerRef.current) {
+            containerRef.current.style.cursor = viewState.zoom > 1 ? 'grab' : 'default';
+        }
+    };
+    
+    // Double-click to reset
+    const handleDoubleClick = () => {
+        setViewState({ zoom: 1, panX: 0 });
+    };
     
     useEffect(() => {
         if (!canvasRef.current || !containerRef.current || !data.length) return;
@@ -577,26 +646,32 @@ function OBDChart({data, paramName, paramConfig, timeRange}) {
             return;
         }
         
-        // Calculate time range for X axis
+        // Calculate full time range
         const now = new Date();
-        let timeStart, timeEnd;
+        let fullTimeStart, fullTimeEnd;
         
         if (timeRange === '24h') {
-            timeEnd = now;
-            timeStart = new Date(now - 24 * 60 * 60 * 1000);
+            fullTimeEnd = now;
+            fullTimeStart = new Date(now - 24 * 60 * 60 * 1000);
         } else if (timeRange === '7d') {
-            timeEnd = now;
-            timeStart = new Date(now - 7 * 24 * 60 * 60 * 1000);
+            fullTimeEnd = now;
+            fullTimeStart = new Date(now - 7 * 24 * 60 * 60 * 1000);
         } else if (timeRange === '30d') {
-            timeEnd = now;
-            timeStart = new Date(now - 30 * 24 * 60 * 60 * 1000);
+            fullTimeEnd = now;
+            fullTimeStart = new Date(now - 30 * 24 * 60 * 60 * 1000);
         } else {
-            // Fallback to data range
-            timeStart = values[0].timestamp;
-            timeEnd = values[values.length - 1].timestamp;
+            fullTimeStart = values[0].timestamp;
+            fullTimeEnd = values[values.length - 1].timestamp;
         }
         
-        const timeSpan = timeEnd - timeStart;
+        const fullTimeSpan = fullTimeEnd - fullTimeStart;
+        
+        // Apply zoom and pan
+        const { zoom, panX } = viewState;
+        const visibleSpan = fullTimeSpan / zoom;
+        const timeStart = new Date(fullTimeStart.getTime() + panX * fullTimeSpan);
+        const timeEnd = new Date(timeStart.getTime() + visibleSpan);
+        const timeSpan = visibleSpan;
         
         // Y axis range
         const minVal = paramConfig.min;
@@ -660,24 +735,26 @@ function OBDChart({data, paramName, paramConfig, timeRange}) {
             ctx.fillText((maxVal - (range / 5) * i).toFixed(0), pad.left - 8, y + 4);
         }
         
-        // Draw X axis time labels
+        // Draw X axis time labels (adaptive based on zoom)
         ctx.fillStyle = "rgba(184,180,212,0.5)";
         ctx.font = "10px sans-serif";
         ctx.textAlign = "center";
         
         let numLabels, labelFormat;
-        if (timeRange === '24h') {
+        const visibleHours = visibleSpan / (60 * 60 * 1000);
+        
+        if (visibleHours <= 2) {
+            numLabels = 8;
+            labelFormat = { hour: '2-digit', minute: '2-digit' };
+        } else if (visibleHours <= 24) {
             numLabels = 6;
             labelFormat = { hour: '2-digit', minute: '2-digit' };
-        } else if (timeRange === '7d') {
+        } else if (visibleHours <= 24 * 7) {
             numLabels = 7;
-            labelFormat = { weekday: 'short', day: 'numeric' };
-        } else if (timeRange === '30d') {
+            labelFormat = { weekday: 'short', hour: '2-digit' };
+        } else {
             numLabels = 6;
             labelFormat = { month: 'short', day: 'numeric' };
-        } else {
-            numLabels = 5;
-            labelFormat = { hour: '2-digit', minute: '2-digit' };
         }
         
         // Draw vertical grid lines and time labels
@@ -686,13 +763,12 @@ function OBDChart({data, paramName, paramConfig, timeRange}) {
             const x = pad.left + (cw / numLabels) * i;
             const labelTime = new Date(timeStart.getTime() + (timeSpan / numLabels) * i);
             
-            // Vertical grid line
             ctx.beginPath();
             ctx.moveTo(x, pad.top);
             ctx.lineTo(x, pad.top + ch);
             ctx.stroke();
             
-            // Time label
+            ctx.fillStyle = "rgba(184,180,212,0.5)";
             ctx.fillText(labelTime.toLocaleString("lt-LT", labelFormat), x, height - 8);
         }
         
@@ -708,25 +784,35 @@ function OBDChart({data, paramName, paramConfig, timeRange}) {
             return pad.top + ch - ((value - minVal) / range) * ch;
         };
         
-        // Draw data line (only connecting points that are close in time)
+        // Filter values to visible range (with some margin)
+        const margin = timeSpan * 0.05;
+        const visibleValues = values.filter(v => {
+            const t = v.timestamp.getTime();
+            return t >= timeStart.getTime() - margin && t <= timeEnd.getTime() + margin;
+        });
+        
+        if (visibleValues.length < 1) {
+            ctx.fillStyle = "rgba(184,180,212,0.4)";
+            ctx.font = "12px sans-serif";
+            ctx.textAlign = "center";
+            ctx.fillText("Šiame periode nėra duomenų", width / 2, height / 2);
+            return;
+        }
+        
+        // Draw data line
         ctx.beginPath();
         ctx.strokeStyle = paramConfig.color;
         ctx.lineWidth = 2;
         ctx.lineCap = "round";
         ctx.lineJoin = "round";
         
-        const maxGap = timeSpan / 20; // If gap > 5% of total range, break line
+        const maxGap = timeSpan / 10;
         let pathStarted = false;
-        let lastX = 0, lastY = 0;
-        
         const drawnPoints = [];
         
-        values.forEach((p, i) => {
+        visibleValues.forEach((p, i) => {
             const x = timeToX(p.timestamp);
             const y = valueToY(p.value);
-            
-            // Skip if outside visible range
-            if (x < pad.left || x > pad.left + cw) return;
             
             drawnPoints.push({ x, y, value: p.value, timestamp: p.timestamp });
             
@@ -734,12 +820,10 @@ function OBDChart({data, paramName, paramConfig, timeRange}) {
                 ctx.moveTo(x, y);
                 pathStarted = true;
             } else {
-                // Check if there's a big time gap
-                const prevTime = values[i - 1]?.timestamp;
+                const prevTime = visibleValues[i - 1]?.timestamp;
                 const gap = p.timestamp - prevTime;
                 
                 if (gap > maxGap) {
-                    // Break line and start new segment
                     ctx.stroke();
                     ctx.beginPath();
                     ctx.moveTo(x, y);
@@ -747,12 +831,10 @@ function OBDChart({data, paramName, paramConfig, timeRange}) {
                     ctx.lineTo(x, y);
                 }
             }
-            lastX = x;
-            lastY = y;
         });
         ctx.stroke();
         
-        // Draw fill gradient under the line
+        // Draw fill gradient
         if (drawnPoints.length > 1) {
             ctx.beginPath();
             ctx.moveTo(drawnPoints[0].x, drawnPoints[0].y);
@@ -763,7 +845,6 @@ function OBDChart({data, paramName, paramConfig, timeRange}) {
                 const gap = curr.timestamp - prev.timestamp;
                 
                 if (gap > maxGap) {
-                    // Close previous fill
                     ctx.lineTo(prev.x, pad.top + ch);
                     ctx.lineTo(drawnPoints[0].x, pad.top + ch);
                     ctx.closePath();
@@ -774,7 +855,6 @@ function OBDChart({data, paramName, paramConfig, timeRange}) {
                     ctx.fillStyle = grad;
                     ctx.fill();
                     
-                    // Start new fill
                     ctx.beginPath();
                     ctx.moveTo(curr.x, curr.y);
                 } else {
@@ -782,7 +862,6 @@ function OBDChart({data, paramName, paramConfig, timeRange}) {
                 }
             }
             
-            // Close final fill
             const lastDrawn = drawnPoints[drawnPoints.length - 1];
             ctx.lineTo(lastDrawn.x, pad.top + ch);
             ctx.lineTo(drawnPoints[0].x, pad.top + ch);
@@ -819,38 +898,53 @@ function OBDChart({data, paramName, paramConfig, timeRange}) {
             ctx.fill();
         }
         
-        // Draw "no data" regions if there are big gaps
-        ctx.fillStyle = "rgba(184,180,212,0.1)";
-        ctx.strokeStyle = "rgba(184,180,212,0.2)";
-        ctx.setLineDash([4, 4]);
-        
-        for (let i = 1; i < values.length; i++) {
-            const prev = values[i - 1];
-            const curr = values[i];
-            const gap = curr.timestamp - prev.timestamp;
+        // Draw zoom indicator if zoomed
+        if (zoom > 1) {
+            ctx.fillStyle = "rgba(102,126,234,0.9)";
+            ctx.font = "bold 11px sans-serif";
+            ctx.textAlign = "right";
+            ctx.fillText(`${zoom.toFixed(1)}x 🔍`, width - pad.right, pad.top - 5);
             
-            if (gap > maxGap * 2) { // Show hatching for really big gaps
-                const x1 = timeToX(prev.timestamp);
-                const x2 = timeToX(curr.timestamp);
-                
-                if (x2 > pad.left && x1 < pad.left + cw) {
-                    const drawX1 = Math.max(x1, pad.left);
-                    const drawX2 = Math.min(x2, pad.left + cw);
-                    
-                    // Hatching pattern for no-data zone
-                    ctx.beginPath();
-                    ctx.rect(drawX1, pad.top, drawX2 - drawX1, ch);
-                    ctx.stroke();
-                }
-            }
+            // Draw minimap
+            const mmWidth = 80;
+            const mmHeight = 20;
+            const mmX = width - pad.right - mmWidth;
+            const mmY = pad.top;
+            
+            ctx.fillStyle = "rgba(10,1,24,0.8)";
+            ctx.fillRect(mmX, mmY, mmWidth, mmHeight);
+            ctx.strokeStyle = "rgba(102,126,234,0.3)";
+            ctx.strokeRect(mmX, mmY, mmWidth, mmHeight);
+            
+            // Visible region on minimap
+            const visibleWidth = mmWidth / zoom;
+            const visibleX = mmX + panX * (mmWidth - visibleWidth);
+            ctx.fillStyle = "rgba(102,126,234,0.4)";
+            ctx.fillRect(visibleX, mmY, visibleWidth, mmHeight);
         }
-        ctx.setLineDash([]);
         
-    }, [data, paramName, paramConfig, timeRange]);
+        // Update cursor
+        container.style.cursor = zoom > 1 ? 'grab' : 'default';
+        
+    }, [data, paramName, paramConfig, timeRange, viewState]);
     
     return (
-        <div ref={containerRef} className="obd-chart-canvas-container">
+        <div 
+            ref={containerRef} 
+            className="obd-chart-canvas-container"
+            onWheel={handleWheel}
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseUp}
+            onDoubleClick={handleDoubleClick}
+        >
             <canvas ref={canvasRef} />
+            {viewState.zoom > 1 && (
+                <div className="chart-zoom-hint">
+                    Vilkite panoramuoti • Dukart spustelėkite atstatyti
+                </div>
+            )}
         </div>
     );
 }
