@@ -12,7 +12,8 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import jwt
 import json
 from math import radians, cos, sin, asin, sqrt
-import requests as http_requests  # For Anthropic API calls
+import urllib.request
+import urllib.error
 
 # Configuration
 DATABASE_URL = os.environ.get('DATABASE_URL')
@@ -1203,27 +1204,25 @@ Pateik:
 Formatas: paprastas tekstas, ne per ilgas (max 200 žodžių). Būk konkretus ir naudingas."""
 
     try:
-        response = http_requests.post(
+        req_data = json.dumps({
+            'model': 'claude-sonnet-4-20250514',
+            'max_tokens': 1000,
+            'messages': [{'role': 'user', 'content': prompt}]
+        }).encode('utf-8')
+        
+        req = urllib.request.Request(
             'https://api.anthropic.com/v1/messages',
+            data=req_data,
             headers={
                 'Content-Type': 'application/json',
                 'x-api-key': ANTHROPIC_API_KEY,
                 'anthropic-version': '2023-06-01'
             },
-            json={
-                'model': 'claude-sonnet-4-20250514',
-                'max_tokens': 1000,
-                'messages': [{'role': 'user', 'content': prompt}]
-            },
-            timeout=30
+            method='POST'
         )
         
-        if response.status_code != 200:
-            error_data = response.json()
-            print(f"❌ Anthropic API error: {error_data}")
-            return jsonify({'error': error_data.get('error', {}).get('message', 'API error')}), response.status_code
-        
-        result = response.json()
+        with urllib.request.urlopen(req, timeout=30) as response:
+            result = json.loads(response.read().decode('utf-8'))
         
         text = ''
         for block in result.get('content', []):
@@ -1233,12 +1232,21 @@ Formatas: paprastas tekstas, ne per ilgas (max 200 žodžių). Būk konkretus ir
         print(f"✅ AI analysis generated for user {user_id}")
         return jsonify({'analysis': text})
         
-    except http_requests.exceptions.Timeout:
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode('utf-8')
+        print(f"❌ Anthropic API HTTP error: {e.code} - {error_body}")
+        try:
+            error_data = json.loads(error_body)
+            error_msg = error_data.get('error', {}).get('message', 'API error')
+        except:
+            error_msg = f"HTTP {e.code}"
+        return jsonify({'error': error_msg}), e.code
+    except urllib.error.URLError as e:
+        print(f"❌ Anthropic API URL error: {e}")
+        return jsonify({'error': f'Ryšio klaida: {str(e.reason)}'}), 500
+    except TimeoutError:
         print("❌ Anthropic API timeout")
         return jsonify({'error': 'Užklausa užtruko per ilgai. Bandykite dar kartą.'}), 504
-    except http_requests.exceptions.RequestException as e:
-        print(f"❌ Anthropic API request error: {e}")
-        return jsonify({'error': f'Ryšio klaida: {str(e)}'}), 500
     except Exception as e:
         print(f"❌ AI analysis unexpected error: {e}")
         return jsonify({'error': f'Netikėta klaida: {str(e)}'}), 500
