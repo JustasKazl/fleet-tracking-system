@@ -171,11 +171,28 @@ function OBDPage() {
     async function loadTelemetry() {
         setLoading(true);
         try {
-            const limits = { "24h": 2880, "7d": 10000, "30d": 20000 };
+            const limits = { '24h': 2880, '7d': 10000, '30d': 20000, 'all': 50000 };
             const res = await fetch(`${API_BASE_URL}/api/telemetry/${selectedVehicle.imei}?limit=${limits[timeRange]}`, { headers: { Authorization: `Bearer ${token}` } });
             const data = await res.json();
             const proc = data.map(p => { let io = p.io_elements; if (typeof io === "string") try { io = JSON.parse(io); } catch { io = {}; } return { timestamp: new Date(p.received_at || p.timestamp), speed: p.speed, latitude: p.latitude, longitude: p.longitude, ...extractOBD(io) }; }).reverse();
-            setTelemetry(proc); analyzeAlerts(proc); setHealthScore(calcHealth(proc)); setDrivingStyle(calcDriving(proc)); setFuelEfficiency(calcFuel(proc)); setTripStats(calcTripStats(proc));
+            setTelemetry(proc);
+            
+            // Filter data by time range for analytics
+            const now = new Date();
+            let cutoff;
+            if (timeRange === '24h') cutoff = new Date(now - 24 * 60 * 60 * 1000);
+            else if (timeRange === '7d') cutoff = new Date(now - 7 * 24 * 60 * 60 * 1000);
+            else if (timeRange === '30d') cutoff = new Date(now - 30 * 24 * 60 * 60 * 1000);
+            else cutoff = null; // 'all'
+            
+            const filtered = cutoff ? proc.filter(d => d.timestamp && d.timestamp >= cutoff) : proc;
+            
+            analyzeAlerts(filtered); 
+            setHealthScore(calcHealth(filtered)); 
+            setDrivingStyle(calcDriving(filtered)); 
+            setFuelEfficiency(calcFuel(filtered)); 
+            setTripStats(calcTripStats(filtered));
+            
             const params = new Set(); proc.forEach(p => Object.keys(OBD_PARAMS).forEach(k => { if (p[k] !== undefined) params.add(k); }));
             const pl = Array.from(params); setAvailableParams(pl); if (!selectedParam && pl.length) setSelectedParam(pl[0]);
         } catch (e) { console.error(e); } finally { setLoading(false); }
@@ -188,7 +205,31 @@ function OBDPage() {
         const d = {}; Object.entries(map).forEach(([id,n]) => { const v = io[id] || io[parseInt(id)]; if (v !== undefined) d[n] = conv[n] ? conv[n](v) : v; }); return d;
     }
 
-    function getStats(p) { const vals = telemetry.map(d => d[p]).filter(v => v !== undefined); if (!vals.length) return null; const c = vals[vals.length-1]; return { current: c, min: Math.min(...vals), max: Math.max(...vals), avg: vals.reduce((a,b)=>a+b,0)/vals.length, status: getValueStatus(c, OBD_PARAMS[p]) }; }
+    // Filter telemetry by selected time range
+    function getFilteredTelemetry() {
+        if (!telemetry.length) return [];
+        const now = new Date();
+        let cutoff;
+        if (timeRange === '24h') cutoff = new Date(now - 24 * 60 * 60 * 1000);
+        else if (timeRange === '7d') cutoff = new Date(now - 7 * 24 * 60 * 60 * 1000);
+        else if (timeRange === '30d') cutoff = new Date(now - 30 * 24 * 60 * 60 * 1000);
+        else return telemetry; // 'all' - no filter
+        return telemetry.filter(d => d.timestamp && d.timestamp >= cutoff);
+    }
+    
+    function getStats(p) {
+        const filtered = getFilteredTelemetry();
+        const vals = filtered.map(d => d[p]).filter(v => v !== undefined);
+        if (!vals.length) return null;
+        const c = vals[vals.length - 1];
+        return {
+            current: c,
+            min: Math.min(...vals),
+            max: Math.max(...vals),
+            avg: vals.reduce((a, b) => a + b, 0) / vals.length,
+            status: getValueStatus(c, OBD_PARAMS[p])
+        };
+    }
 
     async function generateAIAnalysis() {
         if (!healthScore || !drivingStyle) return;
@@ -196,7 +237,7 @@ function OBDPage() {
         setAiLoading(true);
         setAiAnalysis(null);
         
-        const timeLabel = { '24h': 'pastarąją dieną', '7d': 'pastarąją savaitę', '30d': 'pastarąjį mėnesį' }[timeRange];
+        const timeLabel = { '24h': 'pastarąją dieną', '7d': 'pastarąją savaitę', '30d': 'pastarąjį mėnesį', 'all': 'visą laikotarpį' }[timeRange];
         const vehicle = selectedVehicle;
         
         // Build context for AI
@@ -272,7 +313,7 @@ function OBDPage() {
     }
 
     function exportPDF() {
-        const w = window.open('', '_blank'), v = selectedVehicle, t = { '24h': 'Diena', '7d': 'Savaitė', '30d': 'Mėnuo' }[timeRange];
+        const w = window.open('', '_blank'), v = selectedVehicle, t = { '24h': 'Diena', '7d': 'Savaitė', '30d': 'Mėnuo', 'all': 'Viskas' }[timeRange];
         w.document.write(`<!DOCTYPE html><html><head><title>OBD</title><style>body{font-family:Arial;padding:40px}h1{color:#667eea;border-bottom:2px solid #667eea;padding-bottom:10px}.score{font-size:48px;font-weight:bold;text-align:center;padding:20px;background:#f0f9ff;border-radius:12px;margin:20px 0;color:${healthScore?.score >= 80 ? '#22c55e' : healthScore?.score >= 60 ? '#f59e0b' : '#ef4444'}}.grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}.card{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px}.card h3{margin:0 0 10px;color:#667eea}.stat{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee}.good{color:#22c55e}.warning{color:#f59e0b}.bad{color:#ef4444}table{width:100%;border-collapse:collapse}th,td{padding:8px;border-bottom:1px solid #eee;text-align:left}th{background:#f1f5f9}</style></head><body><h1>🔧 OBD-II Ataskaita</h1><p><b>${v?.brand} ${v?.model}</b> | ${v?.plate} | ${t}</p><div class="score">${healthScore?.score||0}% Sveikata</div>${healthScore?.issues?.length?`<h3>Problemos</h3><ul>${healthScore.issues.map(i=>`<li class="${i.severity}">${i.param}: ${i.pct.toFixed(1)}%</li>`).join('')}</ul>`:'<p class="good">✓ OK</p>'}<div class="grid"><div class="card"><h3>🎯 Vairavimas</h3><div class="stat"><span>Eko</span><span>${drivingStyle?.eco}%</span></div><div class="stat"><span>Pagreičiai</span><span>${drivingStyle?.ha}</span></div><div class="stat"><span>Stabdymai</span><span>${drivingStyle?.hb}</span></div></div><div class="card"><h3>⛽ Kuras</h3><div class="stat"><span>Vid</span><span>${fuelEfficiency?.avg?.toFixed(1)||'-'} L/100</span></div><div class="stat"><span>Min</span><span>${fuelEfficiency?.min?.toFixed(1)||'-'}</span></div><div class="stat"><span>Max</span><span>${fuelEfficiency?.max?.toFixed(1)||'-'}</span></div></div></div><h3>Parametrai</h3><table><tr><th>Param</th><th>Vid</th><th>Min</th><th>Max</th></tr>${availableParams.map(p=>{const s=getStats(p),m=OBD_PARAMS[p];return`<tr><td>${m?.icon} ${m?.label}</td><td>${s?.avg?.toFixed(1)} ${m?.unit}</td><td>${s?.min?.toFixed(1)}</td><td>${s?.max?.toFixed(1)}</td></tr>`;}).join('')}</table><p style="color:#666;margin-top:30px">${new Date().toLocaleString('lt-LT')} | ${telemetry.length} taškų</p><script>window.print()</script></body></html>`);
         w.document.close(); showToast('✅ PDF', 'success');
     }
@@ -287,7 +328,7 @@ function OBDPage() {
                     <select className="obd-vehicle-select" value={selectedVehicle?.id||''} onChange={e=>{setSelectedVehicle(vehicles.find(v=>v.id===parseInt(e.target.value)));setSelectedParam(null);setAvailableParams([]);}} disabled={loadingVehicles}>
                         {loadingVehicles?<option>Kraunama...</option>:vehicles.length===0?<option>Nėra automobilių</option>:vehicles.map(v=><option key={v.id} value={v.id}>{v.brand} {v.model} {v.plate?`(${v.plate})`:''}</option>)}
                     </select>
-                    <div className="obd-time-selector">{[{key:"24h",label:"Diena"},{key:"7d",label:"Savaitė"},{key:"30d",label:"Mėnuo"}].map(t=><button key={t.key} onClick={()=>setTimeRange(t.key)} className={`time-btn ${timeRange===t.key?'active':''}`}>{t.label}</button>)}</div>
+                    <div className="obd-time-selector">{[{key:"24h",label:"Diena"},{key:"7d",label:"Savaitė"},{key:"30d",label:"Mėnuo"},{key:"all",label:"Viskas"}].map(t=><button key={t.key} onClick={()=>setTimeRange(t.key)} className={`time-btn ${timeRange===t.key?'active':''}`}>{t.label}</button>)}</div>
                 </div>
 
                 {loading?<div className="obd-loading"><div className="spinner"/><p>Kraunami duomenys...</p></div>
@@ -659,6 +700,10 @@ function OBDChart({data, paramName, paramConfig, timeRange}) {
         } else if (timeRange === '30d') {
             fullTimeEnd = now;
             fullTimeStart = new Date(now - 30 * 24 * 60 * 60 * 1000);
+        } else if (timeRange === 'all') {
+            // Use actual data range
+            fullTimeStart = values[0].timestamp;
+            fullTimeEnd = now; // End at now, not last data point
         } else {
             fullTimeStart = values[0].timestamp;
             fullTimeEnd = values[values.length - 1].timestamp;
