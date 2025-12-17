@@ -394,7 +394,17 @@ function OBDPage() {
                         
                         {aiAnalysis && !aiLoading && (
                             <div className="ai-content">
-                                {aiAnalysis.split('\n').map((line, i) => line.trim() && <p key={i}>{line}</p>)}
+                                {aiAnalysis.split('\n').map((line, i) => {
+                                    if (!line.trim()) return <br key={i} />;
+                                    // Headers
+                                    if (line.startsWith('## ')) return <h3 key={i} className="ai-heading">{line.replace('## ', '')}</h3>;
+                                    if (line.startsWith('**') && line.endsWith('**')) return <h4 key={i} className="ai-subheading">{line.replace(/\*\*/g, '')}</h4>;
+                                    // Parse inline formatting
+                                    let formatted = line
+                                        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                                        .replace(/- /g, '• ');
+                                    return <p key={i} dangerouslySetInnerHTML={{ __html: formatted }} />;
+                                })}
                             </div>
                         )}
                         
