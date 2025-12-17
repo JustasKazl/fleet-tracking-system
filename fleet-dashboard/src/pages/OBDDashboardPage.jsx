@@ -7,23 +7,32 @@ import API_BASE_URL from "../api";
 import "../styles/obd-dashboard.css";
 
 const OBD_PARAMS = {
-    rpm: { label: "Variklio RPM", unit: "rpm", icon: "🔄", color: "#667eea", min: 0, max: 8000, thresholds: { normal: { max: 4000 }, warning: { max: 5500 }, critical: { max: 8000 } }, alertMessage: "Variklio apsukos per didelės" },
-    coolant_temp: { label: "Aušinimo skystis", unit: "°C", icon: "🌡️", color: "#f59e0b", min: -40, max: 130, thresholds: { normal: { max: 95 }, warning: { max: 105 }, critical: { max: 130 } }, alertMessage: "Variklio temperatūra per aukšta" },
-    speed_kmh: { label: "Greitis", unit: "km/h", icon: "🚗", color: "#3b82f6", min: 0, max: 200, thresholds: { normal: { max: 90 }, warning: { max: 130 }, critical: { max: 200 } }, alertMessage: "Viršytas greičio limitas" },
-    engine_load: { label: "Variklio apkrova", unit: "%", icon: "⚡", color: "#8b5cf6", min: 0, max: 100, thresholds: { normal: { max: 70 }, warning: { max: 85 }, critical: { max: 100 } }, alertMessage: "Variklio apkrova per didelė" },
-    intake_air_temp: { label: "Įsiurb. oro temp.", unit: "°C", icon: "🌬️", color: "#06b6d4", min: -40, max: 80, thresholds: { normal: { max: 45 }, warning: { max: 60 }, critical: { max: 80 } }, alertMessage: "Temperatūra per aukšta" },
-    maf: { label: "MAF sensorius", unit: "g/s", icon: "💨", color: "#10b981", min: 0, max: 500, thresholds: { normal: { max: 250 }, warning: { max: 400 }, critical: { max: 500 } }, alertMessage: "MAF nenormali" },
+    rpm: { label: "Variklio RPM", unit: "rpm", icon: "🔄", color: "#667eea", min: 0, max: 8000, thresholds: { normal: { max: 4000 }, warning: { max: 5000 }, critical: { max: 5500 } }, alertMessage: "Variklio apsukos per didelės" },
+    coolant_temp: { label: "Aušinimo skystis", unit: "°C", icon: "🌡️", color: "#f59e0b", min: -40, max: 130, thresholds: { normal: { max: 95 }, warning: { max: 100 }, critical: { max: 105 } }, alertMessage: "Variklio temperatūra per aukšta" },
+    speed_kmh: { label: "Greitis", unit: "km/h", icon: "🚗", color: "#3b82f6", min: 0, max: 200, thresholds: { normal: { max: 90 }, warning: { max: 130 }, critical: { max: 150 } }, alertMessage: "Viršytas greičio limitas" },
+    engine_load: { label: "Variklio apkrova", unit: "%", icon: "⚡", color: "#8b5cf6", min: 0, max: 100, thresholds: { normal: { max: 70 }, warning: { max: 80 }, critical: { max: 90 } }, alertMessage: "Variklio apkrova per didelė" },
+    intake_air_temp: { label: "Įsiurb. oro temp.", unit: "°C", icon: "🌬️", color: "#06b6d4", min: -40, max: 80, thresholds: { normal: { max: 40 }, warning: { max: 50 }, critical: { max: 60 } }, alertMessage: "Temperatūra per aukšta" },
+    maf: { label: "MAF sensorius", unit: "g/s", icon: "💨", color: "#10b981", min: 0, max: 500, thresholds: { normal: { max: 200 }, warning: { max: 300 }, critical: { max: 400 } }, alertMessage: "MAF nenormali" },
     throttle: { label: "Akseleratoriaus pad.", unit: "%", icon: "🎚️", color: "#f43f5e", min: 0, max: 100, thresholds: null, alertMessage: null },
-    fuel_level: { label: "Kuro lygis", unit: "%", icon: "⛽", color: "#eab308", min: 0, max: 100, thresholds: { normal: { min: 25 }, warning: { min: 10 }, critical: { min: 0 } }, alertMessage: "Žemas kuro lygis", inverted: true },
-    battery_voltage: { label: "Akumuliatorius", unit: "V", icon: "🔋", color: "#22c55e", min: 10, max: 16, thresholds: { normal: { min: 13.5 }, warning: { min: 12.0 }, critical: { min: 10 } }, alertMessage: "Įtampa per žema", inverted: true },
-    fuel_rate: { label: "Kuro sąnaudos", unit: "L/100", icon: "📊", color: "#ec4899", min: 0, max: 30, thresholds: { normal: { max: 12 }, warning: { max: 18 }, critical: { max: 30 } }, alertMessage: "Sąnaudos per didelės" },
+    fuel_level: { label: "Kuro lygis", unit: "%", icon: "⛽", color: "#eab308", min: 0, max: 100, thresholds: { normal: { min: 20 }, warning: { min: 15 }, critical: { min: 10 } }, alertMessage: "Žemas kuro lygis", inverted: true },
+    battery_voltage: { label: "Akumuliatorius", unit: "V", icon: "🔋", color: "#22c55e", min: 10, max: 16, thresholds: { normal: { min: 13.5 }, warning: { min: 12.5 }, critical: { min: 12.0 } }, alertMessage: "Įtampa per žema", inverted: true },
+    fuel_rate: { label: "Kuro sąnaudos", unit: "L/100", icon: "📊", color: "#ec4899", min: 0, max: 30, thresholds: { normal: { max: 10 }, warning: { max: 15 }, critical: { max: 20 } }, alertMessage: "Sąnaudos per didelės" },
 };
 
 function getValueStatus(v, p) {
     if (!p?.thresholds) return 'normal';
     const { thresholds: t, inverted } = p;
-    if (inverted) { if (v < (t.critical?.min ?? -Infinity)) return 'critical'; if (v < (t.warning?.min ?? -Infinity)) return 'warning'; if (v < (t.normal?.min ?? -Infinity)) return 'warning'; return 'normal'; }
-    else { if (v >= (t.critical?.max ?? Infinity)) return 'critical'; if (v >= (t.warning?.max ?? Infinity)) return 'critical'; if (v > (t.normal?.max ?? Infinity)) return 'warning'; return 'normal'; }
+    if (inverted) {
+        // For inverted (like fuel level, battery) - lower is worse
+        if (v <= (t.critical?.min ?? -Infinity)) return 'critical';
+        if (v <= (t.warning?.min ?? -Infinity)) return 'warning';
+        return 'normal';
+    } else {
+        // For normal params - higher is worse
+        if (v >= (t.critical?.max ?? Infinity)) return 'critical';
+        if (v >= (t.warning?.max ?? Infinity)) return 'warning';
+        return 'normal';
+    }
 }
 
 const statusColors = { normal: '#22c55e', warning: '#f59e0b', critical: '#ef4444' };
@@ -63,6 +72,7 @@ function OBDPage() {
     async function analyzeAlerts(data) {
         const alerts = {};
         const criticalEvents = {}; // Track critical events per parameter
+        const warningEvents = {}; // Track warning events per parameter
         
         data.forEach(pt => Object.keys(OBD_PARAMS).forEach(p => {
             const v = pt[p]; if (v === undefined) return;
@@ -76,15 +86,22 @@ function OBDPage() {
                 } else {
                     if (v > criticalEvents[p].maxValue) criticalEvents[p].maxValue = v;
                 }
-            } else if (s === 'warning' && alerts[p] !== 'critical') {
-                alerts[p] = 'warning';
+            } else if (s === 'warning') {
+                if (alerts[p] !== 'critical') alerts[p] = 'warning';
+                if (!warningEvents[p]) warningEvents[p] = { count: 0, maxValue: v, param: OBD_PARAMS[p] };
+                warningEvents[p].count++;
+                if (OBD_PARAMS[p].inverted) {
+                    if (v < warningEvents[p].maxValue) warningEvents[p].maxValue = v;
+                } else {
+                    if (v > warningEvents[p].maxValue) warningEvents[p].maxValue = v;
+                }
             }
         }));
         
         Object.keys(OBD_PARAMS).forEach(p => { if (!alerts[p]) alerts[p] = 'normal'; });
         setParamAlerts(alerts);
         
-        // Create alerts in database for critical issues
+        // Create alerts in database for critical/warning issues
         if (!selectedVehicle || !token) return;
         
         // First, fetch existing active alerts to avoid duplicates
@@ -99,31 +116,15 @@ function OBDPage() {
             console.error('Failed to load existing alerts:', err);
         }
         
+        // Process critical events first
         for (const [param, eventData] of Object.entries(criticalEvents)) {
             const alertType = `obd_${param}`;
             
-            // Skip if alert already exists in database (active)
-            if (existingAlertTypes.has(alertType)) {
-                console.log(`⏭️ Alert ${alertType} already exists, skipping`);
-                continue;
-            }
-            
-            // Skip if we already created this alert this session
-            if (createdAlerts.has(alertType)) {
-                console.log(`⏭️ Alert ${alertType} already created this session, skipping`);
-                continue;
-            }
-            
-            // Only create alert if critical happened more than 5 times (not just a spike)
-            if (eventData.count < 5) {
-                console.log(`⏭️ Alert ${alertType} only ${eventData.count} critical events, skipping`);
-                continue;
-            }
+            if (existingAlertTypes.has(alertType)) continue;
+            if (createdAlerts.has(alertType)) continue;
+            if (eventData.count < 5) continue;
             
             const pm = eventData.param;
-            const pct = ((eventData.count / data.length) * 100).toFixed(1);
-            
-            console.log(`🔔 Creating alert: ${alertType} (${eventData.count} critical events)`);
             
             try {
                 const res = await fetch(`${API_BASE_URL}/api/alerts`, {
@@ -137,24 +138,52 @@ function OBDPage() {
                         alert_type: alertType,
                         severity: 'critical',
                         title: pm.alertMessage || `${pm.label} kritinis lygis`,
-                        message: `${pm.label}: max ${eventData.maxValue.toFixed(1)}${pm.unit}, kritinis ${pct}% laiko (${eventData.count} kartų)`,
-                        metadata: {
-                            param,
-                            maxValue: eventData.maxValue,
-                            criticalCount: eventData.count,
-                            criticalPercent: parseFloat(pct),
-                            timeRange
-                        }
+                        message: `${pm.label}: ${pm.inverted ? 'min' : 'max'} ${eventData.maxValue.toFixed(1)}${pm.unit}`,
+                        metadata: { param, maxValue: eventData.maxValue, timeRange }
                     })
                 });
                 
                 if (res.ok) {
-                    // Mark as created
                     setCreatedAlerts(prev => new Set([...prev, alertType]));
-                    console.log(`✅ Alert created: ${pm.label}`);
-                } else {
-                    const errData = await res.json();
-                    console.error(`❌ Failed to create alert: ${errData.error}`);
+                    existingAlertTypes.add(alertType); // Prevent warning alert for same param
+                    console.log(`✅ Critical alert created: ${pm.label}`);
+                }
+            } catch (err) {
+                console.error('Failed to create alert:', err);
+            }
+        }
+        
+        // Process warning events (only if no critical alert exists for same param)
+        for (const [param, eventData] of Object.entries(warningEvents)) {
+            const alertType = `obd_${param}`;
+            
+            if (existingAlertTypes.has(alertType)) continue;
+            if (createdAlerts.has(alertType)) continue;
+            if (criticalEvents[param]) continue; // Skip if critical exists
+            if (eventData.count < 10) continue; // Higher threshold for warnings
+            
+            const pm = eventData.param;
+            
+            try {
+                const res = await fetch(`${API_BASE_URL}/api/alerts`, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}` 
+                    },
+                    body: JSON.stringify({
+                        vehicle_id: selectedVehicle.id,
+                        alert_type: alertType,
+                        severity: 'warning',
+                        title: pm.alertMessage || `${pm.label} įspėjimas`,
+                        message: `${pm.label}: ${pm.inverted ? 'min' : 'max'} ${eventData.maxValue.toFixed(1)}${pm.unit}`,
+                        metadata: { param, maxValue: eventData.maxValue, timeRange }
+                    })
+                });
+                
+                if (res.ok) {
+                    setCreatedAlerts(prev => new Set([...prev, alertType]));
+                    console.log(`✅ Warning alert created: ${pm.label}`);
                 }
             } catch (err) {
                 console.error('Failed to create alert:', err);
