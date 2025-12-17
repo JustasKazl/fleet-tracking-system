@@ -844,72 +844,76 @@ function OBDChart({data, paramName, paramConfig, timeRange}) {
             return;
         }
         
-        // Draw data line
-        ctx.beginPath();
+        // Use absolute gap (1 hour) to detect trip boundaries - never connect across trips
+        const TRIP_GAP_MS = 60 * 60 * 1000; // 1 hour in milliseconds
+        
+        // Draw data line - break at trip boundaries
         ctx.strokeStyle = paramConfig.color;
         ctx.lineWidth = 2;
         ctx.lineCap = "round";
         ctx.lineJoin = "round";
         
-        const maxGap = timeSpan / 10;
-        let pathStarted = false;
         const drawnPoints = [];
+        let segments = []; // Array of segments (each segment is an array of points)
+        let currentSegment = [];
         
         visibleValues.forEach((p, i) => {
             const x = timeToX(p.timestamp);
             const y = valueToY(p.value);
+            const point = { x, y, value: p.value, timestamp: p.timestamp };
             
-            drawnPoints.push({ x, y, value: p.value, timestamp: p.timestamp });
+            drawnPoints.push(point);
             
-            if (!pathStarted) {
-                ctx.moveTo(x, y);
-                pathStarted = true;
+            if (i === 0) {
+                currentSegment.push(point);
             } else {
-                const prevTime = visibleValues[i - 1]?.timestamp;
+                const prevTime = visibleValues[i - 1].timestamp;
                 const gap = p.timestamp - prevTime;
                 
-                if (gap > maxGap) {
-                    ctx.stroke();
-                    ctx.beginPath();
-                    ctx.moveTo(x, y);
+                if (gap > TRIP_GAP_MS) {
+                    // Trip boundary detected - start new segment
+                    if (currentSegment.length > 0) {
+                        segments.push(currentSegment);
+                    }
+                    currentSegment = [point];
                 } else {
-                    ctx.lineTo(x, y);
+                    currentSegment.push(point);
                 }
             }
         });
-        ctx.stroke();
         
-        // Draw fill gradient
-        if (drawnPoints.length > 1) {
-            ctx.beginPath();
-            ctx.moveTo(drawnPoints[0].x, drawnPoints[0].y);
+        // Push last segment
+        if (currentSegment.length > 0) {
+            segments.push(currentSegment);
+        }
+        
+        // Draw each segment separately
+        segments.forEach(segment => {
+            if (segment.length < 1) return;
             
-            for (let i = 1; i < drawnPoints.length; i++) {
-                const prev = drawnPoints[i - 1];
-                const curr = drawnPoints[i];
-                const gap = curr.timestamp - prev.timestamp;
-                
-                if (gap > maxGap) {
-                    ctx.lineTo(prev.x, pad.top + ch);
-                    ctx.lineTo(drawnPoints[0].x, pad.top + ch);
-                    ctx.closePath();
-                    
-                    const grad = ctx.createLinearGradient(0, pad.top, 0, pad.top + ch);
-                    grad.addColorStop(0, paramConfig.color + "20");
-                    grad.addColorStop(1, paramConfig.color + "00");
-                    ctx.fillStyle = grad;
-                    ctx.fill();
-                    
-                    ctx.beginPath();
-                    ctx.moveTo(curr.x, curr.y);
-                } else {
-                    ctx.lineTo(curr.x, curr.y);
-                }
+            ctx.beginPath();
+            ctx.moveTo(segment[0].x, segment[0].y);
+            
+            for (let i = 1; i < segment.length; i++) {
+                ctx.lineTo(segment[i].x, segment[i].y);
+            }
+            ctx.stroke();
+        });
+        
+        // Draw fill gradient for each segment
+        segments.forEach(segment => {
+            if (segment.length < 2) return;
+            
+            ctx.beginPath();
+            ctx.moveTo(segment[0].x, segment[0].y);
+            
+            for (let i = 1; i < segment.length; i++) {
+                ctx.lineTo(segment[i].x, segment[i].y);
             }
             
-            const lastDrawn = drawnPoints[drawnPoints.length - 1];
-            ctx.lineTo(lastDrawn.x, pad.top + ch);
-            ctx.lineTo(drawnPoints[0].x, pad.top + ch);
+            // Close the fill path
+            ctx.lineTo(segment[segment.length - 1].x, pad.top + ch);
+            ctx.lineTo(segment[0].x, pad.top + ch);
             ctx.closePath();
             
             const grad = ctx.createLinearGradient(0, pad.top, 0, pad.top + ch);
@@ -917,7 +921,7 @@ function OBDChart({data, paramName, paramConfig, timeRange}) {
             grad.addColorStop(1, paramConfig.color + "00");
             ctx.fillStyle = grad;
             ctx.fill();
-        }
+        });
         
         // Draw warning/critical points
         drawnPoints.forEach(p => {
