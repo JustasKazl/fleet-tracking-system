@@ -1,5 +1,5 @@
 // =============================================
-// OBD PAGE - Full Width Layout
+// OBD PAGE - Clean version using CSS classes
 // Fleet Tracking Dashboard
 // =============================================
 
@@ -8,6 +8,7 @@ import DashboardLayout from "../layout/DashboardLayout";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import API_BASE_URL from "../api";
+import "../styles/obd-dashboard.css";
 
 const OBD_PARAMS = {
     rpm: { label: "Variklio RPM", unit: "rpm", icon: "🔄", color: "#667eea", min: 0, max: 8000,
@@ -55,7 +56,7 @@ function getValueStatus(value, paramConfig) {
     }
 }
 
-const statusColors = { normal: '#22c55e', warning: '#f59e0b', critical: '#ef4444', low: '#3b82f6' };
+const statusColors = { normal: '#22c55e', warning: '#f59e0b', critical: '#ef4444' };
 
 function OBDPage() {
     const { token } = useAuth();
@@ -69,8 +70,6 @@ function OBDPage() {
     const [availableParams, setAvailableParams] = useState([]);
     const [selectedParam, setSelectedParam] = useState(null);
     const [createdAlerts, setCreatedAlerts] = useState(new Set());
-    const cardsRef = useRef(null);
-    const [cardsHeight, setCardsHeight] = useState(500);
 
     useEffect(() => {
         if (!token) return;
@@ -88,13 +87,6 @@ function OBDPage() {
     useEffect(() => {
         if (selectedVehicle?.imei && token) loadTelemetry();
     }, [selectedVehicle, token, timeRange]);
-
-    useEffect(() => {
-        if (cardsRef.current) {
-            const h = cardsRef.current.offsetHeight;
-            if (h > 100) setCardsHeight(h);
-        }
-    }, [availableParams]);
 
     async function createAlert(severity, type, message, metadata = {}) {
         if (!selectedVehicle || !token) return;
@@ -177,78 +169,82 @@ function OBDPage() {
 
     return (
         <DashboardLayout>
-            <div style={{ padding: '20px' }}>
+            <div className="obd-dashboard-page">
                 {/* Header */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
-                    <div>
-                        <h1 style={{ fontSize: '22px', fontWeight: '700', color: 'var(--text-main)', margin: 0 }}>🔧 OBD-II Diagnostika</h1>
-                        <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: '4px 0 0' }}>Realaus laiko variklio parametrai</p>
+                <div className="obd-header">
+                    <div className="obd-title-section">
+                        <h1 className="obd-title">🔧 OBD-II Diagnostika</h1>
+                        <p className="obd-subtitle">Realaus laiko variklio parametrai</p>
                     </div>
-                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                        <select
-                            value={selectedVehicle?.id || ''}
-                            onChange={e => { setSelectedVehicle(vehicles.find(v => v.id === parseInt(e.target.value))); setSelectedParam(null); setAvailableParams([]); setCreatedAlerts(new Set()); }}
-                            disabled={loadingVehicles}
-                            style={{ padding: '8px 12px', background: 'rgba(26,15,46,0.6)', border: '1px solid var(--border-color)', borderRadius: '8px', color: 'var(--text-main)', fontSize: '13px', minWidth: '180px' }}
-                        >
-                            {loadingVehicles ? <option>Kraunama...</option> : vehicles.length === 0 ? <option>Nėra automobilių</option> :
-                                vehicles.map(v => <option key={v.id} value={v.id}>{v.brand} {v.model} {v.plate ? `(${v.plate})` : ''}</option>)}
-                        </select>
-                        <div style={{ display: 'flex', background: 'rgba(26,15,46,0.4)', borderRadius: '6px', padding: '3px' }}>
-                            {["1h", "6h", "24h", "7d"].map(t => (
-                                <button key={t} onClick={() => setTimeRange(t)} style={{
-                                    padding: '6px 14px', border: 'none', borderRadius: '5px', cursor: 'pointer', fontSize: '12px', fontWeight: '500',
-                                    background: timeRange === t ? 'var(--accent)' : 'transparent', color: timeRange === t ? '#fff' : 'var(--text-muted)', transition: 'all 0.2s'
-                                }}>{t}</button>
-                            ))}
-                        </div>
+                    
+                    <select
+                        className="obd-vehicle-select"
+                        value={selectedVehicle?.id || ''}
+                        onChange={e => { 
+                            setSelectedVehicle(vehicles.find(v => v.id === parseInt(e.target.value))); 
+                            setSelectedParam(null); 
+                            setAvailableParams([]); 
+                            setCreatedAlerts(new Set()); 
+                        }}
+                        disabled={loadingVehicles}
+                    >
+                        {loadingVehicles ? <option>Kraunama...</option> : vehicles.length === 0 ? <option>Nėra automobilių</option> :
+                            vehicles.map(v => <option key={v.id} value={v.id}>{v.brand} {v.model} {v.plate ? `(${v.plate})` : ''}</option>)}
+                    </select>
+                    
+                    <div className="obd-time-selector">
+                        {["1h", "6h", "24h", "7d"].map(t => (
+                            <button 
+                                key={t} 
+                                onClick={() => setTimeRange(t)} 
+                                className={`time-btn ${timeRange === t ? 'active' : ''}`}
+                            >
+                                {t}
+                            </button>
+                        ))}
                     </div>
                 </div>
 
                 {/* Content */}
                 {loading ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '400px', color: 'var(--text-muted)' }}>
-                        <div className="spinner" style={{ width: '40px', height: '40px' }} />
-                        <p style={{ marginTop: '16px' }}>Kraunami duomenys...</p>
+                    <div className="obd-loading">
+                        <div className="spinner" />
+                        <p>Kraunami duomenys...</p>
                     </div>
                 ) : availableParams.length === 0 ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '400px', color: 'var(--text-muted)', textAlign: 'center' }}>
-                        <div style={{ fontSize: '56px', marginBottom: '12px', opacity: 0.4 }}>🔌</div>
-                        <h3 style={{ margin: '0 0 8px', color: 'var(--text-main)' }}>Nėra OBD-II duomenų</h3>
-                        <p style={{ margin: 0 }}>Patikrinkite, ar FMB įrenginys prijungtas prie OBD-II lizdo.</p>
+                    <div className="obd-empty">
+                        <div className="empty-icon">🔌</div>
+                        <h3>Nėra OBD-II duomenų</h3>
+                        <p>Patikrinkite, ar FMB įrenginys prijungtas prie OBD-II lizdo.</p>
                     </div>
                 ) : (
-                    <div style={{ display: 'grid', gridTemplateColumns: '380px 1fr', gap: '20px', alignItems: 'start' }}>
-                        {/* Left - Cards Grid (2 columns) */}
-                        <div ref={cardsRef} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    <div className="obd-main-grid">
+                        {/* Left - Cards Grid */}
+                        <div className="obd-cards-grid">
                             {availableParams.map(paramName => {
                                 const param = OBD_PARAMS[paramName];
                                 const stats = getStats(paramName);
                                 if (!param || !stats) return null;
                                 const isSelected = selectedParam === paramName;
                                 const color = statusColors[stats.status] || param.color;
+                                
                                 return (
                                     <div
                                         key={paramName}
                                         onClick={() => setSelectedParam(paramName)}
-                                        style={{
-                                            padding: '16px',
-                                            background: isSelected ? 'rgba(102,126,234,0.15)' : 'rgba(26,15,46,0.5)',
-                                            border: `2px solid ${isSelected ? 'var(--accent)' : stats.status !== 'normal' ? color : 'var(--border-color)'}`,
-                                            borderRadius: '12px',
-                                            cursor: 'pointer',
-                                            transition: 'all 0.15s',
-                                            position: 'relative'
-                                        }}
+                                        className={`obd-card ${isSelected ? 'selected' : ''} ${stats.status !== 'normal' ? `status-${stats.status}` : ''}`}
                                     >
                                         {stats.status !== 'normal' && (
-                                            <div style={{ position: 'absolute', top: '10px', right: '10px', width: '8px', height: '8px', borderRadius: '50%', background: color, animation: stats.status === 'critical' ? 'pulse 1s infinite' : 'none' }} />
+                                            <div 
+                                                className={`obd-card-status-dot ${stats.status === 'critical' ? 'pulse' : ''}`}
+                                                style={{ background: color }}
+                                            />
                                         )}
-                                        <div style={{ fontSize: '22px', marginBottom: '8px' }}>{param.icon}</div>
-                                        <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '6px', lineHeight: 1.2 }}>{param.label}</div>
-                                        <div style={{ fontSize: '26px', fontWeight: '700', color }}>
+                                        <div className="obd-card-icon">{param.icon}</div>
+                                        <div className="obd-card-label">{param.label}</div>
+                                        <div className="obd-card-value" style={{ color }}>
                                             {stats.avg.toFixed(paramName === 'battery_voltage' ? 1 : 0)}
-                                            <span style={{ fontSize: '13px', fontWeight: '400', color: 'var(--text-muted)', marginLeft: '4px' }}>{param.unit}</span>
+                                            <span className="obd-card-unit">{param.unit}</span>
                                         </div>
                                     </div>
                                 );
@@ -256,65 +252,49 @@ function OBDPage() {
                         </div>
 
                         {/* Right - Chart */}
-                        <div style={{
-                            background: 'rgba(26,15,46,0.5)',
-                            border: '1px solid var(--border-color)',
-                            borderRadius: '16px',
-                            padding: '20px',
-                            height: `${Math.max(cardsHeight, 450)}px`,
-                            display: 'flex',
-                            flexDirection: 'column'
-                        }}>
+                        <div className="obd-chart-panel">
                             {selConfig && selStats ? (
                                 <>
-                                    {/* Chart Header */}
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                            <span style={{ fontSize: '24px' }}>{selConfig.icon}</span>
-                                            <span style={{ fontSize: '18px', fontWeight: '600', color: 'var(--text-main)' }}>{selConfig.label}</span>
-                                            <span style={{
-                                                fontSize: '11px', padding: '4px 10px', borderRadius: '10px', fontWeight: '600',
-                                                background: statusColors[selStats.status] + '20', color: statusColors[selStats.status]
-                                            }}>
+                                    <div className="obd-chart-header">
+                                        <div className="obd-chart-title-row">
+                                            <span className="obd-chart-icon">{selConfig.icon}</span>
+                                            <span className="obd-chart-title">{selConfig.label}</span>
+                                            <span className={`obd-status-badge status-${selStats.status}`}>
                                                 {selStats.status === 'normal' ? '✓ OK' : selStats.status === 'warning' ? '⚠ Įspėjimas' : '🚨 Kritinis'}
                                             </span>
                                         </div>
-                                        <div style={{ display: 'flex', gap: '24px', fontSize: '13px' }}>
-                                            <div style={{ textAlign: 'center' }}>
-                                                <div style={{ color: 'var(--text-muted)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Dabartinis</div>
-                                                <div style={{ fontWeight: '700', color: statusColors[selStats.status], fontSize: '18px' }}>{selStats.current.toFixed(1)}</div>
+                                        <div className="obd-chart-stats">
+                                            <div className="obd-stat">
+                                                <div className="obd-stat-label">Dabartinis</div>
+                                                <div className="obd-stat-value" style={{ color: statusColors[selStats.status] }}>{selStats.current.toFixed(1)}</div>
                                             </div>
-                                            <div style={{ textAlign: 'center' }}>
-                                                <div style={{ color: 'var(--text-muted)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Min</div>
-                                                <div style={{ fontWeight: '600', color: 'var(--text-main)', fontSize: '16px' }}>{selStats.min.toFixed(1)}</div>
+                                            <div className="obd-stat">
+                                                <div className="obd-stat-label">Min</div>
+                                                <div className="obd-stat-value">{selStats.min.toFixed(1)}</div>
                                             </div>
-                                            <div style={{ textAlign: 'center' }}>
-                                                <div style={{ color: 'var(--text-muted)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Vid</div>
-                                                <div style={{ fontWeight: '600', color: 'var(--text-main)', fontSize: '16px' }}>{selStats.avg.toFixed(1)}</div>
+                                            <div className="obd-stat">
+                                                <div className="obd-stat-label">Vid</div>
+                                                <div className="obd-stat-value">{selStats.avg.toFixed(1)}</div>
                                             </div>
-                                            <div style={{ textAlign: 'center' }}>
-                                                <div style={{ color: 'var(--text-muted)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Max</div>
-                                                <div style={{ fontWeight: '600', color: 'var(--text-main)', fontSize: '16px' }}>{selStats.max.toFixed(1)}</div>
+                                            <div className="obd-stat">
+                                                <div className="obd-stat-label">Max</div>
+                                                <div className="obd-stat-value">{selStats.max.toFixed(1)}</div>
                                             </div>
                                         </div>
                                     </div>
                                     
-                                    {/* Chart Canvas */}
-                                    <div style={{ flex: 1, position: 'relative', minHeight: 0 }}>
+                                    <div className="obd-chart-container">
                                         <OBDChart data={telemetry} paramName={selectedParam} paramConfig={selConfig} />
                                     </div>
 
-                                    {/* Legend */}
-                                    <div style={{ display: 'flex', gap: '20px', justifyContent: 'center', marginTop: '14px', fontSize: '12px', color: 'var(--text-muted)' }}>
-                                        <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><span style={{ width: '12px', height: '12px', background: '#22c55e', borderRadius: '3px' }} />Normalus</span>
-                                        <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><span style={{ width: '12px', height: '12px', background: '#f59e0b', borderRadius: '3px' }} />Įspėjimas</span>
-                                        <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><span style={{ width: '12px', height: '12px', background: '#ef4444', borderRadius: '3px' }} />Kritinis</span>
+                                    <div className="obd-chart-legend">
+                                        <span className="legend-item"><span className="legend-dot normal" />Normalus</span>
+                                        <span className="legend-item"><span className="legend-dot warning" />Įspėjimas</span>
+                                        <span className="legend-item"><span className="legend-dot critical" />Kritinis</span>
                                     </div>
                                 </>
                             ) : (
-                                <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>
-                                    Pasirinkite parametrą
-                                </div>
+                                <div className="obd-chart-empty">Pasirinkite parametrą</div>
                             )}
                         </div>
                     </div>
@@ -322,7 +302,7 @@ function OBDPage() {
 
                 {/* Footer */}
                 {telemetry.length > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '16px', padding: '10px 14px', background: 'rgba(26,15,46,0.3)', borderRadius: '8px', fontSize: '12px', color: 'var(--text-muted)' }}>
+                    <div className="obd-footer">
                         <span>Atnaujinta: {telemetry[telemetry.length - 1]?.timestamp.toLocaleString('lt-LT')}</span>
                         <span>{telemetry.length} taškų</span>
                     </div>
@@ -484,8 +464,8 @@ function OBDChart({ data, paramName, paramConfig }) {
     }, [data, paramName, paramConfig]);
 
     return (
-        <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0 }}>
-            <canvas ref={canvasRef} style={{ display: 'block' }} />
+        <div ref={containerRef} className="obd-chart-canvas-container">
+            <canvas ref={canvasRef} />
         </div>
     );
 }
