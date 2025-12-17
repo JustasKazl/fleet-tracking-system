@@ -313,7 +313,7 @@ function OBDPage() {
                                         <div className="obd-stat"><div className="obd-stat-label">Max</div><div className="obd-stat-value">{selStats.max.toFixed(1)}</div></div>
                                     </div>
                                 </div>
-                                <div className="obd-chart-container"><OBDChart data={telemetry} paramName={selectedParam} paramConfig={selConfig}/></div>
+                                <div className="obd-chart-container"><OBDChart data={telemetry} paramName={selectedParam} paramConfig={selConfig} timeRange={timeRange}/></div>
                                 <div className="obd-chart-legend"><span className="legend-item"><span className="legend-dot normal"/>Normalus</span><span className="legend-item"><span className="legend-dot warning"/>Įspėjimas</span><span className="legend-item"><span className="legend-dot critical"/>Kritinis</span></div>
                             </>:<div className="obd-chart-empty">Pasirinkite parametrą</div>}
                         </div>
@@ -535,6 +535,324 @@ function FuelGauge({ value, optimal = 8, max = 20 }) {
     return <canvas ref={canvasRef} />;
 }
 
-function OBDChart({data,paramName,paramConfig}){const canvasRef=useRef(null),containerRef=useRef(null);useEffect(()=>{if(!canvasRef.current||!containerRef.current||!data.length)return;const canvas=canvasRef.current,container=containerRef.current,ctx=canvas.getContext("2d"),dpr=window.devicePixelRatio||1,width=container.offsetWidth,height=container.offsetHeight;canvas.width=width*dpr;canvas.height=height*dpr;canvas.style.width=width+'px';canvas.style.height=height+'px';ctx.scale(dpr,dpr);const pad={top:20,right:20,bottom:35,left:50},cw=width-pad.left-pad.right,ch=height-pad.top-pad.bottom;ctx.fillStyle="rgba(10,1,24,0.15)";ctx.fillRect(0,0,width,height);const values=data.map((p,i)=>({value:p[paramName],timestamp:p.timestamp,i})).filter(p=>p.value!==undefined);if(values.length<2){ctx.fillStyle="rgba(184,180,212,0.5)";ctx.font="14px sans-serif";ctx.textAlign="center";ctx.fillText("Nepakanka duomenų",width/2,height/2);return;}const minVal=paramConfig.min,maxVal=paramConfig.max,range=maxVal-minVal||1;if(paramConfig.thresholds&&!paramConfig.inverted){const{thresholds}=paramConfig,normalY=pad.top+ch-((thresholds.normal.max-minVal)/range)*ch;ctx.fillStyle="rgba(34,197,94,0.06)";ctx.fillRect(pad.left,normalY,cw,pad.top+ch-normalY);if(thresholds.warning){const warnY=pad.top+ch-((thresholds.warning.max-minVal)/range)*ch;ctx.fillStyle="rgba(245,158,11,0.1)";ctx.fillRect(pad.left,warnY,cw,normalY-warnY);ctx.strokeStyle="rgba(245,158,11,0.4)";ctx.lineWidth=1;ctx.setLineDash([6,4]);ctx.beginPath();ctx.moveTo(pad.left,normalY);ctx.lineTo(width-pad.right,normalY);ctx.stroke();ctx.setLineDash([]);}if(thresholds.critical){const critY=thresholds.warning?pad.top+ch-((thresholds.warning.max-minVal)/range)*ch:normalY;ctx.fillStyle="rgba(239,68,68,0.1)";ctx.fillRect(pad.left,pad.top,cw,critY-pad.top);ctx.strokeStyle="rgba(239,68,68,0.5)";ctx.lineWidth=1.5;ctx.setLineDash([6,4]);ctx.beginPath();ctx.moveTo(pad.left,critY);ctx.lineTo(width-pad.right,critY);ctx.stroke();ctx.setLineDash([]);}}ctx.strokeStyle="rgba(102,126,234,0.08)";ctx.lineWidth=1;for(let i=0;i<=5;i++){const y=pad.top+(ch/5)*i;ctx.beginPath();ctx.moveTo(pad.left,y);ctx.lineTo(width-pad.right,y);ctx.stroke();ctx.fillStyle="rgba(184,180,212,0.6)";ctx.font="11px monospace";ctx.textAlign="right";ctx.fillText((maxVal-(range/5)*i).toFixed(0),pad.left-8,y+4);}ctx.beginPath();ctx.strokeStyle=paramConfig.color;ctx.lineWidth=2.5;ctx.lineCap="round";ctx.lineJoin="round";values.forEach((p,i)=>{const x=pad.left+(i/(values.length-1))*cw,y=pad.top+ch-((p.value-minVal)/range)*ch;i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);});ctx.stroke();const grad=ctx.createLinearGradient(0,pad.top,0,pad.top+ch);grad.addColorStop(0,paramConfig.color+"25");grad.addColorStop(1,paramConfig.color+"00");ctx.lineTo(pad.left+cw,pad.top+ch);ctx.lineTo(pad.left,pad.top+ch);ctx.closePath();ctx.fillStyle=grad;ctx.fill();values.forEach((p,i)=>{const status=getValueStatus(p.value,paramConfig);if(status==='warning'||status==='critical'){const x=pad.left+(i/(values.length-1))*cw,y=pad.top+ch-((p.value-minVal)/range)*ch;ctx.beginPath();ctx.arc(x,y,4,0,Math.PI*2);ctx.fillStyle=status==='critical'?'#ef4444':'#f59e0b';ctx.fill();}});const last=values[values.length-1],lx=pad.left+cw,ly=pad.top+ch-((last.value-minVal)/range)*ch;ctx.beginPath();ctx.arc(lx,ly,7,0,Math.PI*2);ctx.fillStyle=paramConfig.color;ctx.fill();ctx.beginPath();ctx.arc(lx,ly,3,0,Math.PI*2);ctx.fillStyle='#fff';ctx.fill();ctx.fillStyle="rgba(184,180,212,0.6)";ctx.font="10px sans-serif";ctx.textAlign="center";ctx.fillText(values[0].timestamp.toLocaleTimeString("lt-LT",{hour:"2-digit",minute:"2-digit"}),pad.left,height-10);ctx.fillText(values[values.length-1].timestamp.toLocaleTimeString("lt-LT",{hour:"2-digit",minute:"2-digit"}),width-pad.right,height-10);if(values.length>2)ctx.fillText(values[Math.floor(values.length/2)].timestamp.toLocaleTimeString("lt-LT",{hour:"2-digit",minute:"2-digit"}),pad.left+cw/2,height-10);},[data,paramName,paramConfig]);return<div ref={containerRef} className="obd-chart-canvas-container"><canvas ref={canvasRef}/></div>;}
+function OBDChart({data, paramName, paramConfig, timeRange}) {
+    const canvasRef = useRef(null);
+    const containerRef = useRef(null);
+    
+    useEffect(() => {
+        if (!canvasRef.current || !containerRef.current || !data.length) return;
+        
+        const canvas = canvasRef.current;
+        const container = containerRef.current;
+        const ctx = canvas.getContext("2d");
+        const dpr = window.devicePixelRatio || 1;
+        const width = container.offsetWidth;
+        const height = container.offsetHeight;
+        
+        canvas.width = width * dpr;
+        canvas.height = height * dpr;
+        canvas.style.width = width + 'px';
+        canvas.style.height = height + 'px';
+        ctx.scale(dpr, dpr);
+        
+        const pad = { top: 20, right: 20, bottom: 45, left: 50 };
+        const cw = width - pad.left - pad.right;
+        const ch = height - pad.top - pad.bottom;
+        
+        // Background
+        ctx.fillStyle = "rgba(10,1,24,0.15)";
+        ctx.fillRect(0, 0, width, height);
+        
+        // Get values with timestamps
+        const values = data
+            .map(p => ({ value: p[paramName], timestamp: p.timestamp }))
+            .filter(p => p.value !== undefined && p.timestamp)
+            .sort((a, b) => a.timestamp - b.timestamp);
+        
+        if (values.length < 2) {
+            ctx.fillStyle = "rgba(184,180,212,0.5)";
+            ctx.font = "14px sans-serif";
+            ctx.textAlign = "center";
+            ctx.fillText("Nepakanka duomenų", width / 2, height / 2);
+            return;
+        }
+        
+        // Calculate time range for X axis
+        const now = new Date();
+        let timeStart, timeEnd;
+        
+        if (timeRange === '24h') {
+            timeEnd = now;
+            timeStart = new Date(now - 24 * 60 * 60 * 1000);
+        } else if (timeRange === '7d') {
+            timeEnd = now;
+            timeStart = new Date(now - 7 * 24 * 60 * 60 * 1000);
+        } else if (timeRange === '30d') {
+            timeEnd = now;
+            timeStart = new Date(now - 30 * 24 * 60 * 60 * 1000);
+        } else {
+            // Fallback to data range
+            timeStart = values[0].timestamp;
+            timeEnd = values[values.length - 1].timestamp;
+        }
+        
+        const timeSpan = timeEnd - timeStart;
+        
+        // Y axis range
+        const minVal = paramConfig.min;
+        const maxVal = paramConfig.max;
+        const range = maxVal - minVal || 1;
+        
+        // Draw threshold zones
+        if (paramConfig.thresholds && !paramConfig.inverted) {
+            const { thresholds } = paramConfig;
+            const normalY = pad.top + ch - ((thresholds.normal.max - minVal) / range) * ch;
+            
+            ctx.fillStyle = "rgba(34,197,94,0.06)";
+            ctx.fillRect(pad.left, normalY, cw, pad.top + ch - normalY);
+            
+            if (thresholds.warning) {
+                const warnY = pad.top + ch - ((thresholds.warning.max - minVal) / range) * ch;
+                ctx.fillStyle = "rgba(245,158,11,0.1)";
+                ctx.fillRect(pad.left, warnY, cw, normalY - warnY);
+                
+                ctx.strokeStyle = "rgba(245,158,11,0.4)";
+                ctx.lineWidth = 1;
+                ctx.setLineDash([6, 4]);
+                ctx.beginPath();
+                ctx.moveTo(pad.left, normalY);
+                ctx.lineTo(width - pad.right, normalY);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+            
+            if (thresholds.critical) {
+                const critY = thresholds.warning 
+                    ? pad.top + ch - ((thresholds.warning.max - minVal) / range) * ch 
+                    : normalY;
+                ctx.fillStyle = "rgba(239,68,68,0.1)";
+                ctx.fillRect(pad.left, pad.top, cw, critY - pad.top);
+                
+                ctx.strokeStyle = "rgba(239,68,68,0.5)";
+                ctx.lineWidth = 1.5;
+                ctx.setLineDash([6, 4]);
+                ctx.beginPath();
+                ctx.moveTo(pad.left, critY);
+                ctx.lineTo(width - pad.right, critY);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+        }
+        
+        // Draw Y axis grid
+        ctx.strokeStyle = "rgba(102,126,234,0.08)";
+        ctx.lineWidth = 1;
+        for (let i = 0; i <= 5; i++) {
+            const y = pad.top + (ch / 5) * i;
+            ctx.beginPath();
+            ctx.moveTo(pad.left, y);
+            ctx.lineTo(width - pad.right, y);
+            ctx.stroke();
+            
+            ctx.fillStyle = "rgba(184,180,212,0.6)";
+            ctx.font = "11px monospace";
+            ctx.textAlign = "right";
+            ctx.fillText((maxVal - (range / 5) * i).toFixed(0), pad.left - 8, y + 4);
+        }
+        
+        // Draw X axis time labels
+        ctx.fillStyle = "rgba(184,180,212,0.5)";
+        ctx.font = "10px sans-serif";
+        ctx.textAlign = "center";
+        
+        let numLabels, labelFormat;
+        if (timeRange === '24h') {
+            numLabels = 6;
+            labelFormat = { hour: '2-digit', minute: '2-digit' };
+        } else if (timeRange === '7d') {
+            numLabels = 7;
+            labelFormat = { weekday: 'short', day: 'numeric' };
+        } else if (timeRange === '30d') {
+            numLabels = 6;
+            labelFormat = { month: 'short', day: 'numeric' };
+        } else {
+            numLabels = 5;
+            labelFormat = { hour: '2-digit', minute: '2-digit' };
+        }
+        
+        // Draw vertical grid lines and time labels
+        ctx.strokeStyle = "rgba(102,126,234,0.05)";
+        for (let i = 0; i <= numLabels; i++) {
+            const x = pad.left + (cw / numLabels) * i;
+            const labelTime = new Date(timeStart.getTime() + (timeSpan / numLabels) * i);
+            
+            // Vertical grid line
+            ctx.beginPath();
+            ctx.moveTo(x, pad.top);
+            ctx.lineTo(x, pad.top + ch);
+            ctx.stroke();
+            
+            // Time label
+            ctx.fillText(labelTime.toLocaleString("lt-LT", labelFormat), x, height - 8);
+        }
+        
+        // Helper to convert timestamp to X position
+        const timeToX = (timestamp) => {
+            const t = timestamp.getTime();
+            const ratio = (t - timeStart.getTime()) / timeSpan;
+            return pad.left + ratio * cw;
+        };
+        
+        // Helper to convert value to Y position
+        const valueToY = (value) => {
+            return pad.top + ch - ((value - minVal) / range) * ch;
+        };
+        
+        // Draw data line (only connecting points that are close in time)
+        ctx.beginPath();
+        ctx.strokeStyle = paramConfig.color;
+        ctx.lineWidth = 2;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        
+        const maxGap = timeSpan / 20; // If gap > 5% of total range, break line
+        let pathStarted = false;
+        let lastX = 0, lastY = 0;
+        
+        const drawnPoints = [];
+        
+        values.forEach((p, i) => {
+            const x = timeToX(p.timestamp);
+            const y = valueToY(p.value);
+            
+            // Skip if outside visible range
+            if (x < pad.left || x > pad.left + cw) return;
+            
+            drawnPoints.push({ x, y, value: p.value, timestamp: p.timestamp });
+            
+            if (!pathStarted) {
+                ctx.moveTo(x, y);
+                pathStarted = true;
+            } else {
+                // Check if there's a big time gap
+                const prevTime = values[i - 1]?.timestamp;
+                const gap = p.timestamp - prevTime;
+                
+                if (gap > maxGap) {
+                    // Break line and start new segment
+                    ctx.stroke();
+                    ctx.beginPath();
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            }
+            lastX = x;
+            lastY = y;
+        });
+        ctx.stroke();
+        
+        // Draw fill gradient under the line
+        if (drawnPoints.length > 1) {
+            ctx.beginPath();
+            ctx.moveTo(drawnPoints[0].x, drawnPoints[0].y);
+            
+            for (let i = 1; i < drawnPoints.length; i++) {
+                const prev = drawnPoints[i - 1];
+                const curr = drawnPoints[i];
+                const gap = curr.timestamp - prev.timestamp;
+                
+                if (gap > maxGap) {
+                    // Close previous fill
+                    ctx.lineTo(prev.x, pad.top + ch);
+                    ctx.lineTo(drawnPoints[0].x, pad.top + ch);
+                    ctx.closePath();
+                    
+                    const grad = ctx.createLinearGradient(0, pad.top, 0, pad.top + ch);
+                    grad.addColorStop(0, paramConfig.color + "20");
+                    grad.addColorStop(1, paramConfig.color + "00");
+                    ctx.fillStyle = grad;
+                    ctx.fill();
+                    
+                    // Start new fill
+                    ctx.beginPath();
+                    ctx.moveTo(curr.x, curr.y);
+                } else {
+                    ctx.lineTo(curr.x, curr.y);
+                }
+            }
+            
+            // Close final fill
+            const lastDrawn = drawnPoints[drawnPoints.length - 1];
+            ctx.lineTo(lastDrawn.x, pad.top + ch);
+            ctx.lineTo(drawnPoints[0].x, pad.top + ch);
+            ctx.closePath();
+            
+            const grad = ctx.createLinearGradient(0, pad.top, 0, pad.top + ch);
+            grad.addColorStop(0, paramConfig.color + "20");
+            grad.addColorStop(1, paramConfig.color + "00");
+            ctx.fillStyle = grad;
+            ctx.fill();
+        }
+        
+        // Draw warning/critical points
+        drawnPoints.forEach(p => {
+            const status = getValueStatus(p.value, paramConfig);
+            if (status === 'warning' || status === 'critical') {
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+                ctx.fillStyle = status === 'critical' ? '#ef4444' : '#f59e0b';
+                ctx.fill();
+            }
+        });
+        
+        // Draw last point indicator
+        if (drawnPoints.length > 0) {
+            const last = drawnPoints[drawnPoints.length - 1];
+            ctx.beginPath();
+            ctx.arc(last.x, last.y, 7, 0, Math.PI * 2);
+            ctx.fillStyle = paramConfig.color;
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(last.x, last.y, 3, 0, Math.PI * 2);
+            ctx.fillStyle = '#fff';
+            ctx.fill();
+        }
+        
+        // Draw "no data" regions if there are big gaps
+        ctx.fillStyle = "rgba(184,180,212,0.1)";
+        ctx.strokeStyle = "rgba(184,180,212,0.2)";
+        ctx.setLineDash([4, 4]);
+        
+        for (let i = 1; i < values.length; i++) {
+            const prev = values[i - 1];
+            const curr = values[i];
+            const gap = curr.timestamp - prev.timestamp;
+            
+            if (gap > maxGap * 2) { // Show hatching for really big gaps
+                const x1 = timeToX(prev.timestamp);
+                const x2 = timeToX(curr.timestamp);
+                
+                if (x2 > pad.left && x1 < pad.left + cw) {
+                    const drawX1 = Math.max(x1, pad.left);
+                    const drawX2 = Math.min(x2, pad.left + cw);
+                    
+                    // Hatching pattern for no-data zone
+                    ctx.beginPath();
+                    ctx.rect(drawX1, pad.top, drawX2 - drawX1, ch);
+                    ctx.stroke();
+                }
+            }
+        }
+        ctx.setLineDash([]);
+        
+    }, [data, paramName, paramConfig, timeRange]);
+    
+    return (
+        <div ref={containerRef} className="obd-chart-canvas-container">
+            <canvas ref={canvasRef} />
+        </div>
+    );
+}
 
 export default OBDPage;
