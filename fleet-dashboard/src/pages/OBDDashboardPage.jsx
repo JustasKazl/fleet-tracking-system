@@ -43,6 +43,7 @@ function OBDPage() {
     const [healthScore, setHealthScore] = useState(null);
     const [drivingStyle, setDrivingStyle] = useState(null);
     const [fuelEfficiency, setFuelEfficiency] = useState(null);
+    const [allTimeFuelAvg, setAllTimeFuelAvg] = useState(null);
     const [tripStats, setTripStats] = useState(null);
     const [aiAnalysis, setAiAnalysis] = useState(null);
     const [aiLoading, setAiLoading] = useState(false);
@@ -383,6 +384,10 @@ function OBDPage() {
             setFuelEfficiency(calcFuel(filtered)); 
             setTripStats(calcTripStats(filtered));
             
+            // Calculate all-time fuel average (from all data, not filtered)
+            const allFuelRates = proc.map(p => p.fuel_rate).filter(v => v !== undefined && v > 0);
+            setAllTimeFuelAvg(allFuelRates.length ? allFuelRates.reduce((a, b) => a + b, 0) / allFuelRates.length : null);
+            
             const params = new Set(); proc.forEach(p => Object.keys(OBD_PARAMS).forEach(k => { if (p[k] !== undefined) params.add(k); }));
             const pl = Array.from(params); setAvailableParams(pl); if (!selectedParam && pl.length) setSelectedParam(pl[0]);
         } catch (e) { console.error(e); } finally { setLoading(false); }
@@ -582,14 +587,18 @@ function OBDPage() {
                             </div>
                             <div className="fuel-comparison">
                                 <div className="fuel-comp-item">
-                                    <span className="comp-label">Min</span>
-                                    <span className="comp-value">{fuelEfficiency?.min?.toFixed(1) || '-'}</span>
+                                    <span className="comp-label">{timeRange === 'all' ? 'Vidurkis' : {
+                                        '24h': 'Dienos vid.',
+                                        '7d': 'Savaitės vid.',
+                                        '30d': 'Mėnesio vid.'
+                                    }[timeRange]}</span>
+                                    <span className="comp-value">{fuelEfficiency?.avg?.toFixed(1) || '-'}</span>
                                     <span className="comp-unit">L/100km</span>
                                 </div>
                                 <div className="fuel-comp-divider">vs</div>
                                 <div className="fuel-comp-item">
-                                    <span className="comp-label">Max</span>
-                                    <span className="comp-value actual">{fuelEfficiency?.max?.toFixed(1) || '-'}</span>
+                                    <span className="comp-label">Viso laiko vid.</span>
+                                    <span className="comp-value actual">{allTimeFuelAvg?.toFixed(1) || '-'}</span>
                                     <span className="comp-unit">L/100km</span>
                                 </div>
                             </div>
