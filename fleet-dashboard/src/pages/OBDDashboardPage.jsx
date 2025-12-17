@@ -1,8 +1,4 @@
-// =============================================
-// OBD PAGE - Clean version using CSS classes
-// Fleet Tracking Dashboard
-// =============================================
-
+// OBD PAGE - Health Score, Driving Style, Fuel Efficiency, Export
 import { useState, useEffect, useRef } from "react";
 import DashboardLayout from "../layout/DashboardLayout";
 import { useAuth } from "../context/AuthContext";
@@ -11,56 +7,23 @@ import API_BASE_URL from "../api";
 import "../styles/obd-dashboard.css";
 
 const OBD_PARAMS = {
-    rpm: { label: "Variklio RPM", unit: "rpm", icon: "🔄", color: "#667eea", min: 0, max: 8000,
-        thresholds: { normal: { max: 4000 }, warning: { max: 5500 }, critical: { max: 8000 } },
-        alertMessage: "Variklio apsukos per didelės" },
-    coolant_temp: { label: "Aušinimo skystis", unit: "°C", icon: "🌡️", color: "#f59e0b", min: -40, max: 130,
-        thresholds: { normal: { max: 95 }, warning: { max: 105 }, critical: { max: 130 } },
-        alertMessage: "Variklio temperatūra per aukšta" },
-    speed_kmh: { label: "Greitis", unit: "km/h", icon: "🚗", color: "#3b82f6", min: 0, max: 200,
-        thresholds: { normal: { max: 90 }, warning: { max: 130 }, critical: { max: 200 } },
-        alertMessage: "Viršytas greičio limitas" },
-    engine_load: { label: "Variklio apkrova", unit: "%", icon: "⚡", color: "#8b5cf6", min: 0, max: 100,
-        thresholds: { normal: { max: 70 }, warning: { max: 85 }, critical: { max: 100 } },
-        alertMessage: "Variklio apkrova per didelė" },
-    intake_air_temp: { label: "Įsiurb. oro temp.", unit: "°C", icon: "🌬️", color: "#06b6d4", min: -40, max: 80,
-        thresholds: { normal: { max: 45 }, warning: { max: 60 }, critical: { max: 80 } },
-        alertMessage: "Įsiurbimo oro temperatūra per aukšta" },
-    maf: { label: "MAF sensorius", unit: "g/s", icon: "💨", color: "#10b981", min: 0, max: 500,
-        thresholds: { normal: { max: 250 }, warning: { max: 400 }, critical: { max: 500 } },
-        alertMessage: "MAF reikšmė nenormali" },
-    throttle: { label: "Akseleratoriaus pad.", unit: "%", icon: "🎚️", color: "#f43f5e", min: 0, max: 100,
-        thresholds: null, alertMessage: null },
-    fuel_level: { label: "Kuro lygis", unit: "%", icon: "⛽", color: "#eab308", min: 0, max: 100,
-        thresholds: { normal: { min: 25 }, warning: { min: 10 }, critical: { min: 0 } },
-        alertMessage: "Žemas kuro lygis", inverted: true },
-    battery_voltage: { label: "Akumuliatorius", unit: "V", icon: "🔋", color: "#22c55e", min: 10, max: 16,
-        thresholds: { normal: { min: 13 }, warning: { min: 11 }, critical: { min: 8 } },
-        alertMessage: "Akumuliatoriaus įtampa per žema", inverted: true },
-    fuel_rate: { label: "Kuro sąnaudos", unit: "L/100", icon: "📊", color: "#ec4899", min: 0, max: 30,
-        thresholds: { normal: { max: 12 }, warning: { max: 18 }, critical: { max: 30 } },
-        alertMessage: "Kuro sąnaudos per didelės" },
+    rpm: { label: "Variklio RPM", unit: "rpm", icon: "🔄", color: "#667eea", min: 0, max: 8000, thresholds: { normal: { max: 4000 }, warning: { max: 5500 }, critical: { max: 8000 } }, alertMessage: "Variklio apsukos per didelės" },
+    coolant_temp: { label: "Aušinimo skystis", unit: "°C", icon: "🌡️", color: "#f59e0b", min: -40, max: 130, thresholds: { normal: { max: 95 }, warning: { max: 105 }, critical: { max: 130 } }, alertMessage: "Variklio temperatūra per aukšta" },
+    speed_kmh: { label: "Greitis", unit: "km/h", icon: "🚗", color: "#3b82f6", min: 0, max: 200, thresholds: { normal: { max: 90 }, warning: { max: 130 }, critical: { max: 200 } }, alertMessage: "Viršytas greičio limitas" },
+    engine_load: { label: "Variklio apkrova", unit: "%", icon: "⚡", color: "#8b5cf6", min: 0, max: 100, thresholds: { normal: { max: 70 }, warning: { max: 85 }, critical: { max: 100 } }, alertMessage: "Variklio apkrova per didelė" },
+    intake_air_temp: { label: "Įsiurb. oro temp.", unit: "°C", icon: "🌬️", color: "#06b6d4", min: -40, max: 80, thresholds: { normal: { max: 45 }, warning: { max: 60 }, critical: { max: 80 } }, alertMessage: "Temperatūra per aukšta" },
+    maf: { label: "MAF sensorius", unit: "g/s", icon: "💨", color: "#10b981", min: 0, max: 500, thresholds: { normal: { max: 250 }, warning: { max: 400 }, critical: { max: 500 } }, alertMessage: "MAF nenormali" },
+    throttle: { label: "Akseleratoriaus pad.", unit: "%", icon: "🎚️", color: "#f43f5e", min: 0, max: 100, thresholds: null, alertMessage: null },
+    fuel_level: { label: "Kuro lygis", unit: "%", icon: "⛽", color: "#eab308", min: 0, max: 100, thresholds: { normal: { min: 25 }, warning: { min: 10 }, critical: { min: 0 } }, alertMessage: "Žemas kuro lygis", inverted: true },
+    battery_voltage: { label: "Akumuliatorius", unit: "V", icon: "🔋", color: "#22c55e", min: 10, max: 16, thresholds: { normal: { min: 13.5 }, warning: { min: 12.0 }, critical: { min: 10 } }, alertMessage: "Įtampa per žema", inverted: true },
+    fuel_rate: { label: "Kuro sąnaudos", unit: "L/100", icon: "📊", color: "#ec4899", min: 0, max: 30, thresholds: { normal: { max: 12 }, warning: { max: 18 }, critical: { max: 30 } }, alertMessage: "Sąnaudos per didelės" },
 };
 
-function getValueStatus(value, paramConfig) {
-    if (!paramConfig?.thresholds) return 'normal';
-    const { thresholds, inverted } = paramConfig;
-    if (inverted) {
-        // For inverted (fuel, battery): lower is worse
-        if (value < (thresholds.critical?.min ?? -Infinity)) return 'critical';
-        if (value < (thresholds.warning?.min ?? -Infinity)) return 'warning';
-        if (value < (thresholds.normal?.min ?? -Infinity)) return 'warning';
-        return 'normal';
-    } else {
-        // For normal params: higher is worse
-        // Check if above critical threshold
-        if (value >= (thresholds.critical?.max ?? Infinity)) return 'critical';
-        // Check if above warning threshold (which is same as normal.max)
-        if (value >= (thresholds.warning?.max ?? Infinity)) return 'critical';
-        // Check if above normal threshold - this means we're in warning zone
-        if (value > (thresholds.normal?.max ?? Infinity)) return 'warning';
-        return 'normal';
-    }
+function getValueStatus(v, p) {
+    if (!p?.thresholds) return 'normal';
+    const { thresholds: t, inverted } = p;
+    if (inverted) { if (v < (t.critical?.min ?? -Infinity)) return 'critical'; if (v < (t.warning?.min ?? -Infinity)) return 'warning'; if (v < (t.normal?.min ?? -Infinity)) return 'warning'; return 'normal'; }
+    else { if (v >= (t.critical?.max ?? Infinity)) return 'critical'; if (v >= (t.warning?.max ?? Infinity)) return 'critical'; if (v > (t.normal?.max ?? Infinity)) return 'warning'; return 'normal'; }
 }
 
 const statusColors = { normal: '#22c55e', warning: '#f59e0b', critical: '#ef4444' };
@@ -76,464 +39,193 @@ function OBDPage() {
     const [timeRange, setTimeRange] = useState("24h");
     const [availableParams, setAvailableParams] = useState([]);
     const [selectedParam, setSelectedParam] = useState(null);
-    const [createdAlerts, setCreatedAlerts] = useState(new Set());
-    const [paramAlerts, setParamAlerts] = useState({}); // Track max severity per param
+    const [paramAlerts, setParamAlerts] = useState({});
+    const [healthScore, setHealthScore] = useState(null);
+    const [drivingStyle, setDrivingStyle] = useState(null);
+    const [fuelEfficiency, setFuelEfficiency] = useState(null);
 
     useEffect(() => {
         if (!token) return;
         fetch(`${API_BASE_URL}/api/vehicles`, { headers: { Authorization: `Bearer ${token}` } })
-            .then(res => res.json())
-            .then(data => {
-                const list = Array.isArray(data) ? data : [];
-                setVehicles(list);
-                if (list.length > 0) setSelectedVehicle(list[0]);
-            })
-            .catch(console.error)
+            .then(r => r.json()).then(d => { const l = Array.isArray(d) ? d : []; setVehicles(l); if (l.length) setSelectedVehicle(l[0]); })
             .finally(() => setLoadingVehicles(false));
     }, [token]);
 
-    useEffect(() => {
-        if (selectedVehicle?.imei && token) loadTelemetry();
-    }, [selectedVehicle, token, timeRange]);
+    useEffect(() => { if (selectedVehicle?.imei && token) loadTelemetry(); }, [selectedVehicle, token, timeRange]);
 
-    async function createAlert(severity, type, message, metadata = {}) {
-        if (!selectedVehicle || !token) return;
-        const alertKey = `${selectedVehicle.id}-${type}-${Date.now().toString().slice(0, -4)}`;
-        if (createdAlerts.has(alertKey)) return;
-        try {
-            const res = await fetch(`${API_BASE_URL}/api/alerts`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    vehicle_id: selectedVehicle.id, alert_type: type, severity, title: message,
-                    message: `${message} - ${selectedVehicle.brand} ${selectedVehicle.model}`,
-                    metadata: { ...metadata, vehicle_name: `${selectedVehicle.brand} ${selectedVehicle.model}`, source: 'obd' }
-                })
-            });
-            if (res.ok) {
-                setCreatedAlerts(prev => new Set([...prev, alertKey]));
-                showToast(`⚠️ ${message}`, severity === 'critical' ? 'error' : 'warning');
-            }
-        } catch (err) { console.error(err); }
-    }
-
-    function checkThresholds(paramName, value) {
-        const param = OBD_PARAMS[paramName];
-        if (!param?.alertMessage) return;
-        const status = getValueStatus(value, param);
-        
-        // Track the worst status for this parameter
-        if (status === 'critical' || status === 'warning') {
-            setParamAlerts(prev => {
-                const current = prev[paramName];
-                // Only upgrade: normal -> warning -> critical
-                if (!current || (current === 'warning' && status === 'critical')) {
-                    return { ...prev, [paramName]: status };
-                }
-                return prev;
-            });
-        }
-        
-        if (status === 'critical') createAlert('critical', `obd_${paramName}`, param.alertMessage, { parameter: paramName, value, unit: param.unit });
-        else if (status === 'warning') createAlert('warning', `obd_${paramName}`, param.alertMessage, { parameter: paramName, value, unit: param.unit });
-    }
-
-    // Check all telemetry points for alerts in the period
-    function analyzeAlertsInPeriod(telemetryData) {
+    function analyzeAlerts(data) {
         const alerts = {};
-        
-        telemetryData.forEach(point => {
-            Object.keys(OBD_PARAMS).forEach(paramName => {
-                const value = point[paramName];
-                if (value === undefined) return;
-                
-                const param = OBD_PARAMS[paramName];
-                if (!param?.thresholds) return;
-                
-                const status = getValueStatus(value, param);
-                
-                // Track worst status: critical > warning > normal
-                if (status === 'critical') {
-                    alerts[paramName] = 'critical';
-                } else if (status === 'warning') {
-                    if (alerts[paramName] !== 'critical') {
-                        alerts[paramName] = 'warning';
-                    }
-                }
-                // Don't set normal - we only care if there were any warnings/criticals
-            });
-        });
-        
-        // Set normal for params that had no warnings/criticals
-        availableParams.forEach(paramName => {
-            if (!alerts[paramName]) {
-                alerts[paramName] = 'normal';
-            }
-        });
-        
+        data.forEach(pt => Object.keys(OBD_PARAMS).forEach(p => {
+            const v = pt[p]; if (v === undefined) return;
+            const s = getValueStatus(v, OBD_PARAMS[p]);
+            if (s === 'critical') alerts[p] = 'critical'; else if (s === 'warning' && alerts[p] !== 'critical') alerts[p] = 'warning';
+        }));
+        Object.keys(OBD_PARAMS).forEach(p => { if (!alerts[p]) alerts[p] = 'normal'; });
         setParamAlerts(alerts);
     }
 
+    function calcHealth(data) {
+        if (!data.length) return null;
+        let score = 100; const issues = [];
+        Object.keys(OBD_PARAMS).forEach(p => {
+            const pm = OBD_PARAMS[p]; if (!pm.thresholds) return;
+            const vals = data.map(d => d[p]).filter(v => v !== undefined); if (!vals.length) return;
+            let w = 0, c = 0; vals.forEach(v => { const s = getValueStatus(v, pm); if (s === 'warning') w++; if (s === 'critical') c++; });
+            const wp = (w/vals.length)*100, cp = (c/vals.length)*100;
+            if (cp > 5) { issues.push({ param: pm.label, severity: 'critical', pct: cp }); score -= cp * 1.5; }
+            else if (wp > 10) { issues.push({ param: pm.label, severity: 'warning', pct: wp }); score -= wp * 0.3; }
+        });
+        return { score: Math.max(0, Math.min(100, Math.round(score))), issues: issues.slice(0, 5) };
+    }
+
+    function calcDriving(data) {
+        if (data.length < 2) return null;
+        let ha = 0, hb = 0, hr = 0, os = 0, hl = 0, idle = 0;
+        for (let i = 1; i < data.length; i++) {
+            const p = data[i-1], c = data[i];
+            if (c.speed_kmh !== undefined && p.speed_kmh !== undefined) { const ch = c.speed_kmh - p.speed_kmh; if (ch > 15) ha++; if (ch < -20) hb++; }
+            if (c.rpm > 4500) hr++; if (c.speed_kmh > 130) os++; if (c.engine_load > 80) hl++;
+            if (c.speed_kmh === 0 && c.rpm > 0) idle++;
+        }
+        const eco = Math.max(0, Math.round(100 - Math.min(100, ((ha+hb+hr+hl)/data.length)*1000)));
+        return { eco, aggressive: 100-eco, ha, hb, hr, os, hl, idle: Math.round((idle/data.length)*100) };
+    }
+
+    function calcFuel(data) {
+        const rates = data.map(p => p.fuel_rate).filter(v => v > 0), levels = data.map(p => p.fuel_level).filter(v => v !== undefined);
+        if (!rates.length && !levels.length) return null;
+        const avg = rates.length ? rates.reduce((a,b)=>a+b,0)/rates.length : null;
+        return { avg, min: rates.length ? Math.min(...rates) : null, max: rates.length ? Math.max(...rates) : null, used: levels.length >= 2 ? Math.max(0, levels[0]-levels[levels.length-1]) : null, rating: avg === null ? 'average' : avg > 15 ? 'poor' : avg > 10 ? 'average' : 'good' };
+    }
+
     async function loadTelemetry() {
-        if (!selectedVehicle?.imei) return;
         setLoading(true);
         try {
             const limits = { "24h": 2880, "7d": 10000, "30d": 20000 };
-            const res = await fetch(`${API_BASE_URL}/api/telemetry/${selectedVehicle.imei}?limit=${limits[timeRange] || 120}`,
-                { headers: { Authorization: `Bearer ${token}` } });
-            if (!res.ok) throw new Error("Failed");
+            const res = await fetch(`${API_BASE_URL}/api/telemetry/${selectedVehicle.imei}?limit=${limits[timeRange]}`, { headers: { Authorization: `Bearer ${token}` } });
             const data = await res.json();
-            const processed = data.map(point => {
-                let io = point.io_elements;
-                if (typeof io === "string") try { io = JSON.parse(io); } catch { io = {}; }
-                return { timestamp: new Date(point.received_at || point.timestamp), speed: point.speed, ...extractOBD(io) };
-            }).reverse();
-            setTelemetry(processed);
-            
-            // Analyze all points for alerts in this period
-            analyzeAlertsInPeriod(processed);
-            
-            if (processed.length > 0) {
-                const latest = processed[processed.length - 1];
-                Object.keys(OBD_PARAMS).forEach(p => { if (latest[p] !== undefined) checkThresholds(p, latest[p]); });
-            }
-            const params = new Set();
-            processed.forEach(p => Object.keys(OBD_PARAMS).forEach(k => { if (p[k] !== undefined) params.add(k); }));
-            const paramList = Array.from(params);
-            setAvailableParams(paramList);
-            if (!selectedParam && paramList.length > 0) setSelectedParam(paramList[0]);
-        } catch (err) { console.error(err); }
-        finally { setLoading(false); }
+            const proc = data.map(p => { let io = p.io_elements; if (typeof io === "string") try { io = JSON.parse(io); } catch { io = {}; } return { timestamp: new Date(p.received_at || p.timestamp), speed: p.speed, ...extractOBD(io) }; }).reverse();
+            setTelemetry(proc); analyzeAlerts(proc); setHealthScore(calcHealth(proc)); setDrivingStyle(calcDriving(proc)); setFuelEfficiency(calcFuel(proc));
+            const params = new Set(); proc.forEach(p => Object.keys(OBD_PARAMS).forEach(k => { if (p[k] !== undefined) params.add(k); }));
+            const pl = Array.from(params); setAvailableParams(pl); if (!selectedParam && pl.length) setSelectedParam(pl[0]);
+        } catch (e) { console.error(e); } finally { setLoading(false); }
     }
 
     function extractOBD(io) {
         if (!io) return {};
         const map = { 36: "rpm", 32: "coolant_temp", 37: "speed_kmh", 31: "engine_load", 39: "intake_air_temp", 40: "maf", 41: "throttle", 48: "fuel_level", 51: "battery_voltage", 60: "fuel_rate" };
-        const conv = { maf: v => v * 0.01, battery_voltage: v => v * 0.001, fuel_rate: v => v * 0.01 };
-        const data = {};
-        Object.entries(map).forEach(([id, name]) => {
-            const val = io[id] || io[parseInt(id)];
-            if (val !== undefined) data[name] = conv[name] ? conv[name](val) : val;
-        });
-        return data;
+        const conv = { maf: v => v*0.01, battery_voltage: v => v*0.001, fuel_rate: v => v*0.01 };
+        const d = {}; Object.entries(map).forEach(([id,n]) => { const v = io[id] || io[parseInt(id)]; if (v !== undefined) d[n] = conv[n] ? conv[n](v) : v; }); return d;
     }
 
-    function getStats(paramName) {
-        const values = telemetry.map(p => p[paramName]).filter(v => v !== undefined);
-        if (!values.length) return null;
-        const current = values[values.length - 1];
-        return { current, min: Math.min(...values), max: Math.max(...values), avg: values.reduce((a, b) => a + b, 0) / values.length, status: getValueStatus(current, OBD_PARAMS[paramName]) };
+    function getStats(p) { const vals = telemetry.map(d => d[p]).filter(v => v !== undefined); if (!vals.length) return null; const c = vals[vals.length-1]; return { current: c, min: Math.min(...vals), max: Math.max(...vals), avg: vals.reduce((a,b)=>a+b,0)/vals.length, status: getValueStatus(c, OBD_PARAMS[p]) }; }
+
+    function exportCSV() {
+        const h = ['Laikas', ...availableParams.map(p => OBD_PARAMS[p]?.label || p)];
+        const r = telemetry.map(p => [p.timestamp.toLocaleString('lt-LT'), ...availableParams.map(k => p[k]?.toFixed(2) || '')]);
+        const csv = [h.join(','), ...r.map(x => x.join(','))].join('\n');
+        const b = new Blob([csv], { type: 'text/csv' }), u = URL.createObjectURL(b), l = document.createElement('a');
+        l.href = u; l.download = `obd_${selectedVehicle?.plate}_${timeRange}.csv`; l.click(); showToast('✅ CSV eksportuotas', 'success');
     }
 
-    const selConfig = selectedParam ? OBD_PARAMS[selectedParam] : null;
-    const selStats = selectedParam ? getStats(selectedParam) : null;
+    function exportPDF() {
+        const w = window.open('', '_blank'), v = selectedVehicle, t = { '24h': 'Diena', '7d': 'Savaitė', '30d': 'Mėnuo' }[timeRange];
+        w.document.write(`<!DOCTYPE html><html><head><title>OBD</title><style>body{font-family:Arial;padding:40px}h1{color:#667eea;border-bottom:2px solid #667eea;padding-bottom:10px}.score{font-size:48px;font-weight:bold;text-align:center;padding:20px;background:#f0f9ff;border-radius:12px;margin:20px 0;color:${healthScore?.score >= 80 ? '#22c55e' : healthScore?.score >= 60 ? '#f59e0b' : '#ef4444'}}.grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}.card{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px}.card h3{margin:0 0 10px;color:#667eea}.stat{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee}.good{color:#22c55e}.warning{color:#f59e0b}.bad{color:#ef4444}table{width:100%;border-collapse:collapse}th,td{padding:8px;border-bottom:1px solid #eee;text-align:left}th{background:#f1f5f9}</style></head><body><h1>🔧 OBD-II Ataskaita</h1><p><b>${v?.brand} ${v?.model}</b> | ${v?.plate} | ${t}</p><div class="score">${healthScore?.score||0}% Sveikata</div>${healthScore?.issues?.length?`<h3>Problemos</h3><ul>${healthScore.issues.map(i=>`<li class="${i.severity}">${i.param}: ${i.pct.toFixed(1)}%</li>`).join('')}</ul>`:'<p class="good">✓ OK</p>'}<div class="grid"><div class="card"><h3>🎯 Vairavimas</h3><div class="stat"><span>Eko</span><span>${drivingStyle?.eco}%</span></div><div class="stat"><span>Pagreičiai</span><span>${drivingStyle?.ha}</span></div><div class="stat"><span>Stabdymai</span><span>${drivingStyle?.hb}</span></div></div><div class="card"><h3>⛽ Kuras</h3><div class="stat"><span>Vid</span><span>${fuelEfficiency?.avg?.toFixed(1)||'-'} L/100</span></div><div class="stat"><span>Min</span><span>${fuelEfficiency?.min?.toFixed(1)||'-'}</span></div><div class="stat"><span>Max</span><span>${fuelEfficiency?.max?.toFixed(1)||'-'}</span></div></div></div><h3>Parametrai</h3><table><tr><th>Param</th><th>Vid</th><th>Min</th><th>Max</th></tr>${availableParams.map(p=>{const s=getStats(p),m=OBD_PARAMS[p];return`<tr><td>${m?.icon} ${m?.label}</td><td>${s?.avg?.toFixed(1)} ${m?.unit}</td><td>${s?.min?.toFixed(1)}</td><td>${s?.max?.toFixed(1)}</td></tr>`;}).join('')}</table><p style="color:#666;margin-top:30px">${new Date().toLocaleString('lt-LT')} | ${telemetry.length} taškų</p><script>window.print()</script></body></html>`);
+        w.document.close(); showToast('✅ PDF', 'success');
+    }
+
+    const selConfig = selectedParam ? OBD_PARAMS[selectedParam] : null, selStats = selectedParam ? getStats(selectedParam) : null;
 
     return (
         <DashboardLayout>
             <div className="obd-dashboard-page">
-                {/* Header */}
                 <div className="obd-header">
-                    <div className="obd-title-section">
-                        <h1 className="obd-title">🔧 OBD-II Diagnostika</h1>
-                        <p className="obd-subtitle">Realaus laiko variklio parametrai</p>
-                    </div>
-                    
-                    <select
-                        className="obd-vehicle-select"
-                        value={selectedVehicle?.id || ''}
-                        onChange={e => { 
-                            setSelectedVehicle(vehicles.find(v => v.id === parseInt(e.target.value))); 
-                            setSelectedParam(null); 
-                            setAvailableParams([]); 
-                            setCreatedAlerts(new Set()); 
-                        }}
-                        disabled={loadingVehicles}
-                    >
-                        {loadingVehicles ? <option>Kraunama...</option> : vehicles.length === 0 ? <option>Nėra automobilių</option> :
-                            vehicles.map(v => <option key={v.id} value={v.id}>{v.brand} {v.model} {v.plate ? `(${v.plate})` : ''}</option>)}
+                    <div className="obd-title-section"><h1 className="obd-title">🔧 OBD-II Diagnostika</h1><p className="obd-subtitle">Realaus laiko variklio parametrai</p></div>
+                    <select className="obd-vehicle-select" value={selectedVehicle?.id||''} onChange={e=>{setSelectedVehicle(vehicles.find(v=>v.id===parseInt(e.target.value)));setSelectedParam(null);setAvailableParams([]);}} disabled={loadingVehicles}>
+                        {loadingVehicles?<option>Kraunama...</option>:vehicles.length===0?<option>Nėra automobilių</option>:vehicles.map(v=><option key={v.id} value={v.id}>{v.brand} {v.model} {v.plate?`(${v.plate})`:''}</option>)}
                     </select>
-                    
-                    <div className="obd-time-selector">
-                        {[
-                            { key: "24h", label: "Diena" },
-                            { key: "7d", label: "Savaitė" },
-                            { key: "30d", label: "Mėnuo" }
-                        ].map(t => (
-                            <button 
-                                key={t.key} 
-                                onClick={() => setTimeRange(t.key)} 
-                                className={`time-btn ${timeRange === t.key ? 'active' : ''}`}
-                            >
-                                {t.label}
-                            </button>
-                        ))}
-                    </div>
+                    <div className="obd-time-selector">{[{key:"24h",label:"Diena"},{key:"7d",label:"Savaitė"},{key:"30d",label:"Mėnuo"}].map(t=><button key={t.key} onClick={()=>setTimeRange(t.key)} className={`time-btn ${timeRange===t.key?'active':''}`}>{t.label}</button>)}</div>
                 </div>
 
-                {/* Content */}
-                {loading ? (
-                    <div className="obd-loading">
-                        <div className="spinner" />
-                        <p>Kraunami duomenys...</p>
-                    </div>
-                ) : availableParams.length === 0 ? (
-                    <div className="obd-empty">
-                        <div className="empty-icon">🔌</div>
-                        <h3>Nėra OBD-II duomenų</h3>
-                        <p>Patikrinkite, ar FMB įrenginys prijungtas prie OBD-II lizdo.</p>
-                    </div>
-                ) : (
+                {loading?<div className="obd-loading"><div className="spinner"/><p>Kraunami duomenys...</p></div>
+                :availableParams.length===0?<div className="obd-empty"><div className="empty-icon">🔌</div><h3>Nėra OBD-II duomenų</h3><p>Patikrinkite FMB įrenginį.</p></div>
+                :<>
                     <div className="obd-main-grid">
-                        {/* Left - Cards Grid */}
                         <div className="obd-cards-grid">
-                            {availableParams.map(paramName => {
-                                const param = OBD_PARAMS[paramName];
-                                const stats = getStats(paramName);
-                                if (!param || !stats) return null;
-                                const isSelected = selectedParam === paramName;
-                                const periodAlert = paramAlerts[paramName] || 'normal';
-                                const alertColor = periodAlert === 'critical' ? '#ef4444' : periodAlert === 'warning' ? '#f59e0b' : '#22c55e';
-                                
-                                return (
-                                    <div
-                                        key={paramName}
-                                        onClick={() => setSelectedParam(paramName)}
-                                        className={`obd-card ${isSelected ? 'selected' : ''} alert-${periodAlert}`}
-                                    >
-                                        {periodAlert !== 'normal' && (
-                                            <div 
-                                                className={`obd-card-status-dot ${periodAlert === 'critical' ? 'pulse' : ''}`}
-                                                style={{ background: alertColor }}
-                                            />
-                                        )}
-                                        <div className="obd-card-icon">{param.icon}</div>
-                                        <div className="obd-card-label">{param.label}</div>
-                                        <div className="obd-card-value" style={{ color: param.color }}>
-                                            {stats.avg.toFixed(paramName === 'battery_voltage' ? 1 : 0)}
-                                            <span className="obd-card-unit">{param.unit}</span>
-                                        </div>
-                                    </div>
-                                );
-                            })}
+                            {availableParams.map(p=>{const pm=OBD_PARAMS[p],st=getStats(p);if(!pm||!st)return null;const al=paramAlerts[p]||'normal',col=al==='critical'?'#ef4444':al==='warning'?'#f59e0b':'#22c55e';
+                                return <div key={p} onClick={()=>setSelectedParam(p)} className={`obd-card ${selectedParam===p?'selected':''} alert-${al}`}>
+                                    {al!=='normal'&&<div className={`obd-card-status-dot ${al==='critical'?'pulse':''}`} style={{background:col}}/>}
+                                    <div className="obd-card-icon">{pm.icon}</div><div className="obd-card-label">{pm.label}</div>
+                                    <div className="obd-card-value" style={{color:pm.color}}>{st.avg.toFixed(p==='battery_voltage'?1:0)}<span className="obd-card-unit">{pm.unit}</span></div>
+                                </div>;})}
                         </div>
-
-                        {/* Right - Chart */}
                         <div className="obd-chart-panel">
-                            {selConfig && selStats ? (
-                                <>
-                                    <div className="obd-chart-header">
-                                        <div className="obd-chart-title-row">
-                                            <span className="obd-chart-icon">{selConfig.icon}</span>
-                                            <span className="obd-chart-title">{selConfig.label}</span>
-                                            <span className={`obd-status-badge status-${selStats.status}`}>
-                                                {selStats.status === 'normal' ? '✓ OK' : selStats.status === 'warning' ? '⚠ Įspėjimas' : '🚨 Kritinis'}
-                                            </span>
-                                        </div>
-                                        <div className="obd-chart-stats">
-                                            <div className="obd-stat">
-                                                <div className="obd-stat-label">Dabartinis</div>
-                                                <div className="obd-stat-value" style={{ color: statusColors[selStats.status] }}>{selStats.current.toFixed(1)}</div>
-                                            </div>
-                                            <div className="obd-stat">
-                                                <div className="obd-stat-label">Min</div>
-                                                <div className="obd-stat-value">{selStats.min.toFixed(1)}</div>
-                                            </div>
-                                            <div className="obd-stat">
-                                                <div className="obd-stat-label">Vid</div>
-                                                <div className="obd-stat-value">{selStats.avg.toFixed(1)}</div>
-                                            </div>
-                                            <div className="obd-stat">
-                                                <div className="obd-stat-label">Max</div>
-                                                <div className="obd-stat-value">{selStats.max.toFixed(1)}</div>
-                                            </div>
-                                        </div>
+                            {selConfig&&selStats?<>
+                                <div className="obd-chart-header">
+                                    <div className="obd-chart-title-row"><span className="obd-chart-icon">{selConfig.icon}</span><span className="obd-chart-title">{selConfig.label}</span><span className={`obd-status-badge status-${selStats.status}`}>{selStats.status==='normal'?'✓ OK':selStats.status==='warning'?'⚠ Įspėjimas':'🚨 Kritinis'}</span></div>
+                                    <div className="obd-chart-stats">
+                                        <div className="obd-stat"><div className="obd-stat-label">Dabartinis</div><div className="obd-stat-value" style={{color:statusColors[selStats.status]}}>{selStats.current.toFixed(1)}</div></div>
+                                        <div className="obd-stat"><div className="obd-stat-label">Min</div><div className="obd-stat-value">{selStats.min.toFixed(1)}</div></div>
+                                        <div className="obd-stat"><div className="obd-stat-label">Vid</div><div className="obd-stat-value">{selStats.avg.toFixed(1)}</div></div>
+                                        <div className="obd-stat"><div className="obd-stat-label">Max</div><div className="obd-stat-value">{selStats.max.toFixed(1)}</div></div>
                                     </div>
-                                    
-                                    <div className="obd-chart-container">
-                                        <OBDChart data={telemetry} paramName={selectedParam} paramConfig={selConfig} />
-                                    </div>
-
-                                    <div className="obd-chart-legend">
-                                        <span className="legend-item"><span className="legend-dot normal" />Normalus</span>
-                                        <span className="legend-item"><span className="legend-dot warning" />Įspėjimas</span>
-                                        <span className="legend-item"><span className="legend-dot critical" />Kritinis</span>
-                                    </div>
-                                </>
-                            ) : (
-                                <div className="obd-chart-empty">Pasirinkite parametrą</div>
-                            )}
+                                </div>
+                                <div className="obd-chart-container"><OBDChart data={telemetry} paramName={selectedParam} paramConfig={selConfig}/></div>
+                                <div className="obd-chart-legend"><span className="legend-item"><span className="legend-dot normal"/>Normalus</span><span className="legend-item"><span className="legend-dot warning"/>Įspėjimas</span><span className="legend-item"><span className="legend-dot critical"/>Kritinis</span></div>
+                            </>:<div className="obd-chart-empty">Pasirinkite parametrą</div>}
                         </div>
                     </div>
-                )}
 
-                {/* Footer */}
-                {telemetry.length > 0 && (
-                    <div className="obd-footer">
-                        <span>Atnaujinta: {telemetry[telemetry.length - 1]?.timestamp.toLocaleString('lt-LT')}</span>
-                        <span>{telemetry.length} taškų</span>
+                    <div className="obd-analytics-grid">
+                        <div className="obd-analytics-card health-card">
+                            <h3>🏥 Variklio Sveikata</h3>
+                            <div className="health-score-container">
+                                <div className={`health-score ${healthScore?.score>=80?'good':healthScore?.score>=60?'warning':'bad'}`}>{healthScore?.score||0}%</div>
+                                <div className="health-bar"><div className="health-bar-fill" style={{width:`${healthScore?.score||0}%`,background:healthScore?.score>=80?'#22c55e':healthScore?.score>=60?'#f59e0b':'#ef4444'}}/></div>
+                            </div>
+                            <div className="health-issues">{healthScore?.issues?.length?healthScore.issues.map((i,x)=><div key={x} className={`health-issue ${i.severity}`}><span>{i.severity==='critical'?'🚨':'⚠️'}</span><span>{i.param}</span></div>):<div className="health-issue good"><span>✓</span><span>Visi parametrai normalūs</span></div>}</div>
+                        </div>
+
+                        <div className="obd-analytics-card driving-card">
+                            <h3>🎯 Vairavimo Stilius</h3>
+                            <div className="driving-meters">
+                                <div className="driving-meter"><span className="meter-label">Ekonomiškas</span><div className="meter-bar"><div className="meter-fill eco" style={{width:`${drivingStyle?.eco||0}%`}}/></div><span className="meter-value">{drivingStyle?.eco||0}%</span></div>
+                                <div className="driving-meter"><span className="meter-label">Agresyvus</span><div className="meter-bar"><div className="meter-fill aggressive" style={{width:`${drivingStyle?.aggressive||0}%`}}/></div><span className="meter-value">{drivingStyle?.aggressive||0}%</span></div>
+                            </div>
+                            <div className="driving-stats">
+                                <div className="driving-stat"><span>🚀</span><span>Staigūs pagreičiai</span><span>{drivingStyle?.ha||0}</span></div>
+                                <div className="driving-stat"><span>🛑</span><span>Staigūs stabdymai</span><span>{drivingStyle?.hb||0}</span></div>
+                                <div className="driving-stat"><span>🔄</span><span>Aukšti RPM</span><span>{drivingStyle?.hr||0}</span></div>
+                                <div className="driving-stat"><span>🏎️</span><span>Greitis &gt;130</span><span>{drivingStyle?.os||0}</span></div>
+                                <div className="driving-stat"><span>⏸️</span><span>Tuščia eiga</span><span>{drivingStyle?.idle||0}%</span></div>
+                            </div>
+                        </div>
+
+                        <div className="obd-analytics-card fuel-card">
+                            <h3>⛽ Kuro Efektyvumas</h3>
+                            <div className={`fuel-rating ${fuelEfficiency?.rating||'average'}`}>{fuelEfficiency?.rating==='good'?'✓ Geras':fuelEfficiency?.rating==='average'?'◐ Vidutinis':'✗ Blogas'}</div>
+                            <div className="fuel-main"><span className="fuel-value">{fuelEfficiency?.avg?.toFixed(1)||'-'}</span><span className="fuel-unit">L/100km</span></div>
+                            <div className="fuel-stats">
+                                <div className="fuel-stat"><span>Min</span><span className="good">{fuelEfficiency?.min?.toFixed(1)||'-'}</span></div>
+                                <div className="fuel-stat"><span>Max</span><span className="bad">{fuelEfficiency?.max?.toFixed(1)||'-'}</span></div>
+                                <div className="fuel-stat"><span>Sunaudota</span><span>{fuelEfficiency?.used?.toFixed(0)||'-'}%</span></div>
+                            </div>
+                        </div>
                     </div>
-                )}
+
+                    <div className="obd-export-section">
+                        <span className="export-title">📥 Eksportuoti</span>
+                        <button className="export-btn" onClick={exportCSV}>📄 CSV</button>
+                        <button className="export-btn" onClick={exportPDF}>📊 PDF Ataskaita</button>
+                    </div>
+                </>}
+
+                {telemetry.length>0&&<div className="obd-footer"><span>Atnaujinta: {telemetry[telemetry.length-1]?.timestamp.toLocaleString('lt-LT')}</span><span>{telemetry.length} taškų</span></div>}
             </div>
         </DashboardLayout>
     );
 }
 
-function OBDChart({ data, paramName, paramConfig }) {
-    const canvasRef = useRef(null);
-    const containerRef = useRef(null);
-
-    useEffect(() => {
-        if (!canvasRef.current || !containerRef.current || !data.length) return;
-
-        const canvas = canvasRef.current;
-        const container = containerRef.current;
-        const ctx = canvas.getContext("2d");
-        const dpr = window.devicePixelRatio || 1;
-        
-        const width = container.offsetWidth;
-        const height = container.offsetHeight;
-        
-        canvas.width = width * dpr;
-        canvas.height = height * dpr;
-        canvas.style.width = width + 'px';
-        canvas.style.height = height + 'px';
-        ctx.scale(dpr, dpr);
-
-        const pad = { top: 20, right: 20, bottom: 35, left: 50 };
-        const cw = width - pad.left - pad.right;
-        const ch = height - pad.top - pad.bottom;
-
-        ctx.fillStyle = "rgba(10,1,24,0.15)";
-        ctx.fillRect(0, 0, width, height);
-
-        const values = data.map((p, i) => ({ value: p[paramName], timestamp: p.timestamp, i })).filter(p => p.value !== undefined);
-        if (values.length < 2) {
-            ctx.fillStyle = "rgba(184,180,212,0.5)";
-            ctx.font = "14px sans-serif";
-            ctx.textAlign = "center";
-            ctx.fillText("Nepakanka duomenų", width / 2, height / 2);
-            return;
-        }
-
-        const minVal = paramConfig.min, maxVal = paramConfig.max, range = maxVal - minVal || 1;
-
-        // Threshold zones
-        if (paramConfig.thresholds && !paramConfig.inverted) {
-            const { thresholds } = paramConfig;
-            const normalY = pad.top + ch - ((thresholds.normal.max - minVal) / range) * ch;
-            ctx.fillStyle = "rgba(34,197,94,0.06)";
-            ctx.fillRect(pad.left, normalY, cw, pad.top + ch - normalY);
-
-            if (thresholds.warning) {
-                const warnY = pad.top + ch - ((thresholds.warning.max - minVal) / range) * ch;
-                ctx.fillStyle = "rgba(245,158,11,0.1)";
-                ctx.fillRect(pad.left, warnY, cw, normalY - warnY);
-                ctx.strokeStyle = "rgba(245,158,11,0.4)";
-                ctx.lineWidth = 1;
-                ctx.setLineDash([6, 4]);
-                ctx.beginPath();
-                ctx.moveTo(pad.left, normalY);
-                ctx.lineTo(width - pad.right, normalY);
-                ctx.stroke();
-                ctx.setLineDash([]);
-            }
-
-            if (thresholds.critical) {
-                const critY = thresholds.warning ? pad.top + ch - ((thresholds.warning.max - minVal) / range) * ch : normalY;
-                ctx.fillStyle = "rgba(239,68,68,0.1)";
-                ctx.fillRect(pad.left, pad.top, cw, critY - pad.top);
-                ctx.strokeStyle = "rgba(239,68,68,0.5)";
-                ctx.lineWidth = 1.5;
-                ctx.setLineDash([6, 4]);
-                ctx.beginPath();
-                ctx.moveTo(pad.left, critY);
-                ctx.lineTo(width - pad.right, critY);
-                ctx.stroke();
-                ctx.setLineDash([]);
-            }
-        }
-
-        // Grid
-        ctx.strokeStyle = "rgba(102,126,234,0.08)";
-        ctx.lineWidth = 1;
-        for (let i = 0; i <= 5; i++) {
-            const y = pad.top + (ch / 5) * i;
-            ctx.beginPath();
-            ctx.moveTo(pad.left, y);
-            ctx.lineTo(width - pad.right, y);
-            ctx.stroke();
-            ctx.fillStyle = "rgba(184,180,212,0.6)";
-            ctx.font = "11px monospace";
-            ctx.textAlign = "right";
-            ctx.fillText((maxVal - (range / 5) * i).toFixed(0), pad.left - 8, y + 4);
-        }
-
-        // Line
-        ctx.beginPath();
-        ctx.strokeStyle = paramConfig.color;
-        ctx.lineWidth = 2.5;
-        ctx.lineCap = "round";
-        ctx.lineJoin = "round";
-        values.forEach((p, i) => {
-            const x = pad.left + (i / (values.length - 1)) * cw;
-            const y = pad.top + ch - ((p.value - minVal) / range) * ch;
-            i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-        });
-        ctx.stroke();
-
-        // Fill
-        const grad = ctx.createLinearGradient(0, pad.top, 0, pad.top + ch);
-        grad.addColorStop(0, paramConfig.color + "25");
-        grad.addColorStop(1, paramConfig.color + "00");
-        ctx.lineTo(pad.left + cw, pad.top + ch);
-        ctx.lineTo(pad.left, pad.top + ch);
-        ctx.closePath();
-        ctx.fillStyle = grad;
-        ctx.fill();
-
-        // Warning/critical dots
-        values.forEach((p, i) => {
-            const status = getValueStatus(p.value, paramConfig);
-            if (status === 'warning' || status === 'critical') {
-                const x = pad.left + (i / (values.length - 1)) * cw;
-                const y = pad.top + ch - ((p.value - minVal) / range) * ch;
-                ctx.beginPath();
-                ctx.arc(x, y, 4, 0, Math.PI * 2);
-                ctx.fillStyle = status === 'critical' ? '#ef4444' : '#f59e0b';
-                ctx.fill();
-            }
-        });
-
-        // Current dot
-        const last = values[values.length - 1];
-        const lx = pad.left + cw, ly = pad.top + ch - ((last.value - minVal) / range) * ch;
-        ctx.beginPath();
-        ctx.arc(lx, ly, 7, 0, Math.PI * 2);
-        ctx.fillStyle = paramConfig.color;
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(lx, ly, 3, 0, Math.PI * 2);
-        ctx.fillStyle = '#fff';
-        ctx.fill();
-
-        // Time labels
-        ctx.fillStyle = "rgba(184,180,212,0.6)";
-        ctx.font = "10px sans-serif";
-        ctx.textAlign = "center";
-        const first = values[0].timestamp, lastT = values[values.length - 1].timestamp;
-        ctx.fillText(first.toLocaleTimeString("lt-LT", { hour: "2-digit", minute: "2-digit" }), pad.left, height - 10);
-        ctx.fillText(lastT.toLocaleTimeString("lt-LT", { hour: "2-digit", minute: "2-digit" }), width - pad.right, height - 10);
-        if (values.length > 2) {
-            const mid = values[Math.floor(values.length / 2)].timestamp;
-            ctx.fillText(mid.toLocaleTimeString("lt-LT", { hour: "2-digit", minute: "2-digit" }), pad.left + cw / 2, height - 10);
-        }
-    }, [data, paramName, paramConfig]);
-
-    return (
-        <div ref={containerRef} className="obd-chart-canvas-container">
-            <canvas ref={canvasRef} />
-        </div>
-    );
-}
+function OBDChart({data,paramName,paramConfig}){const canvasRef=useRef(null),containerRef=useRef(null);useEffect(()=>{if(!canvasRef.current||!containerRef.current||!data.length)return;const canvas=canvasRef.current,container=containerRef.current,ctx=canvas.getContext("2d"),dpr=window.devicePixelRatio||1,width=container.offsetWidth,height=container.offsetHeight;canvas.width=width*dpr;canvas.height=height*dpr;canvas.style.width=width+'px';canvas.style.height=height+'px';ctx.scale(dpr,dpr);const pad={top:20,right:20,bottom:35,left:50},cw=width-pad.left-pad.right,ch=height-pad.top-pad.bottom;ctx.fillStyle="rgba(10,1,24,0.15)";ctx.fillRect(0,0,width,height);const values=data.map((p,i)=>({value:p[paramName],timestamp:p.timestamp,i})).filter(p=>p.value!==undefined);if(values.length<2){ctx.fillStyle="rgba(184,180,212,0.5)";ctx.font="14px sans-serif";ctx.textAlign="center";ctx.fillText("Nepakanka duomenų",width/2,height/2);return;}const minVal=paramConfig.min,maxVal=paramConfig.max,range=maxVal-minVal||1;if(paramConfig.thresholds&&!paramConfig.inverted){const{thresholds}=paramConfig,normalY=pad.top+ch-((thresholds.normal.max-minVal)/range)*ch;ctx.fillStyle="rgba(34,197,94,0.06)";ctx.fillRect(pad.left,normalY,cw,pad.top+ch-normalY);if(thresholds.warning){const warnY=pad.top+ch-((thresholds.warning.max-minVal)/range)*ch;ctx.fillStyle="rgba(245,158,11,0.1)";ctx.fillRect(pad.left,warnY,cw,normalY-warnY);ctx.strokeStyle="rgba(245,158,11,0.4)";ctx.lineWidth=1;ctx.setLineDash([6,4]);ctx.beginPath();ctx.moveTo(pad.left,normalY);ctx.lineTo(width-pad.right,normalY);ctx.stroke();ctx.setLineDash([]);}if(thresholds.critical){const critY=thresholds.warning?pad.top+ch-((thresholds.warning.max-minVal)/range)*ch:normalY;ctx.fillStyle="rgba(239,68,68,0.1)";ctx.fillRect(pad.left,pad.top,cw,critY-pad.top);ctx.strokeStyle="rgba(239,68,68,0.5)";ctx.lineWidth=1.5;ctx.setLineDash([6,4]);ctx.beginPath();ctx.moveTo(pad.left,critY);ctx.lineTo(width-pad.right,critY);ctx.stroke();ctx.setLineDash([]);}}ctx.strokeStyle="rgba(102,126,234,0.08)";ctx.lineWidth=1;for(let i=0;i<=5;i++){const y=pad.top+(ch/5)*i;ctx.beginPath();ctx.moveTo(pad.left,y);ctx.lineTo(width-pad.right,y);ctx.stroke();ctx.fillStyle="rgba(184,180,212,0.6)";ctx.font="11px monospace";ctx.textAlign="right";ctx.fillText((maxVal-(range/5)*i).toFixed(0),pad.left-8,y+4);}ctx.beginPath();ctx.strokeStyle=paramConfig.color;ctx.lineWidth=2.5;ctx.lineCap="round";ctx.lineJoin="round";values.forEach((p,i)=>{const x=pad.left+(i/(values.length-1))*cw,y=pad.top+ch-((p.value-minVal)/range)*ch;i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);});ctx.stroke();const grad=ctx.createLinearGradient(0,pad.top,0,pad.top+ch);grad.addColorStop(0,paramConfig.color+"25");grad.addColorStop(1,paramConfig.color+"00");ctx.lineTo(pad.left+cw,pad.top+ch);ctx.lineTo(pad.left,pad.top+ch);ctx.closePath();ctx.fillStyle=grad;ctx.fill();values.forEach((p,i)=>{const status=getValueStatus(p.value,paramConfig);if(status==='warning'||status==='critical'){const x=pad.left+(i/(values.length-1))*cw,y=pad.top+ch-((p.value-minVal)/range)*ch;ctx.beginPath();ctx.arc(x,y,4,0,Math.PI*2);ctx.fillStyle=status==='critical'?'#ef4444':'#f59e0b';ctx.fill();}});const last=values[values.length-1],lx=pad.left+cw,ly=pad.top+ch-((last.value-minVal)/range)*ch;ctx.beginPath();ctx.arc(lx,ly,7,0,Math.PI*2);ctx.fillStyle=paramConfig.color;ctx.fill();ctx.beginPath();ctx.arc(lx,ly,3,0,Math.PI*2);ctx.fillStyle='#fff';ctx.fill();ctx.fillStyle="rgba(184,180,212,0.6)";ctx.font="10px sans-serif";ctx.textAlign="center";ctx.fillText(values[0].timestamp.toLocaleTimeString("lt-LT",{hour:"2-digit",minute:"2-digit"}),pad.left,height-10);ctx.fillText(values[values.length-1].timestamp.toLocaleTimeString("lt-LT",{hour:"2-digit",minute:"2-digit"}),width-pad.right,height-10);if(values.length>2)ctx.fillText(values[Math.floor(values.length/2)].timestamp.toLocaleTimeString("lt-LT",{hour:"2-digit",minute:"2-digit"}),pad.left+cw/2,height-10);},[data,paramName,paramConfig]);return<div ref={containerRef} className="obd-chart-canvas-container"><canvas ref={canvasRef}/></div>;}
 
 export default OBDPage;
