@@ -10,7 +10,7 @@ import DashboardPage from "./pages/Dashboard";
 import VehiclesPage from "./pages/VehiclesPage";
 import VehicleDetailsPage from "./pages/VehicleDetailsPage";
 import TripsHistoryPage from "./pages/TripsHistoryPage";
-import OBDPage from "./pages/OBDPage";
+import OBDPage from "./pages/OBDDashboardPage";
 import ProfilePage from "./pages/ProfilePage";
 import SettingsPage from "./pages/SettingsPage";
 import AlertsPage from "./pages/AlertsPage";
@@ -48,7 +48,7 @@ function App() {
                     <Route path="/trips" element={<ProtectedRoute><TripsHistoryPage /></ProtectedRoute>} />
                     
                     {/* OBD Diagnostics */}
-                    <Route path="/obd" element={<ProtectedRoute><OBDPage /></ProtectedRoute>} />
+                    <Route path="/obd" element={<ProtectedRoute><OBDDashboardPage /></ProtectedRoute>} />
                     
                     {/* Alerts */}
                     <Route path="/alerts" element={<ProtectedRoute><AlertsPage /></ProtectedRoute>} />
