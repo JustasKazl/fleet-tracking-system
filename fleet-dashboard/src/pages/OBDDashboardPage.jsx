@@ -319,17 +319,18 @@ function FuelGauge({ value, optimal = 8, max = 20 }) {
         const canvas = canvasRef.current;
         const ctx = canvas.getContext('2d');
         const dpr = window.devicePixelRatio || 1;
-        const size = 200;
+        const width = 200;
+        const height = 160;
         
-        canvas.width = size * dpr;
-        canvas.height = (size * 0.7) * dpr;
-        canvas.style.width = size + 'px';
-        canvas.style.height = (size * 0.7) + 'px';
+        canvas.width = width * dpr;
+        canvas.height = height * dpr;
+        canvas.style.width = width + 'px';
+        canvas.style.height = height + 'px';
         ctx.scale(dpr, dpr);
         
-        const cx = size / 2;
-        const cy = size * 0.52;
-        const radius = size * 0.38;
+        const cx = width / 2;
+        const cy = 75;
+        const radius = 65;
         const startAngle = Math.PI;
         const endAngle = 2 * Math.PI;
         
@@ -372,7 +373,7 @@ function FuelGauge({ value, optimal = 8, max = 20 }) {
             
             // Needle
             const needleAngle = valueAngle - Math.PI / 2;
-            const needleLength = radius - 30;
+            const needleLength = radius - 28;
             ctx.beginPath();
             ctx.moveTo(cx, cy);
             ctx.lineTo(cx + Math.cos(needleAngle + Math.PI/2) * needleLength, cy + Math.sin(needleAngle + Math.PI/2) * needleLength);
@@ -396,19 +397,19 @@ function FuelGauge({ value, optimal = 8, max = 20 }) {
         ctx.fillStyle = 'rgba(184,180,212,0.7)';
         ctx.font = '11px sans-serif';
         ctx.textAlign = 'left';
-        ctx.fillText('0', 15, cy + 5);
+        ctx.fillText('0', 25, cy + 10);
         ctx.textAlign = 'right';
-        ctx.fillText(max.toString(), size - 15, cy + 5);
+        ctx.fillText(max.toString(), width - 25, cy + 10);
         
         // Value text below gauge
         if (value !== null && value !== undefined) {
             ctx.fillStyle = '#fff';
             ctx.font = 'bold 28px Monaco, monospace';
             ctx.textAlign = 'center';
-            ctx.fillText(value.toFixed(1), cx, cy + 45);
+            ctx.fillText(value.toFixed(1), cx, 125);
             ctx.font = '12px sans-serif';
             ctx.fillStyle = 'rgba(184,180,212,0.8)';
-            ctx.fillText('L/100km', cx, cy + 62);
+            ctx.fillText('L/100km', cx, 145);
         }
     }, [value, optimal, max]);
     
