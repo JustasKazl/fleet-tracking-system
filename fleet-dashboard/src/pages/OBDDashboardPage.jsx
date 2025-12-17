@@ -44,6 +44,8 @@ function OBDPage() {
     const [drivingStyle, setDrivingStyle] = useState(null);
     const [fuelEfficiency, setFuelEfficiency] = useState(null);
     const [tripStats, setTripStats] = useState(null);
+    const [aiAnalysis, setAiAnalysis] = useState(null);
+    const [aiLoading, setAiLoading] = useState(false);
 
     useEffect(() => {
         if (!token) return;
@@ -188,6 +190,115 @@ function OBDPage() {
 
     function getStats(p) { const vals = telemetry.map(d => d[p]).filter(v => v !== undefined); if (!vals.length) return null; const c = vals[vals.length-1]; return { current: c, min: Math.min(...vals), max: Math.max(...vals), avg: vals.reduce((a,b)=>a+b,0)/vals.length, status: getValueStatus(c, OBD_PARAMS[p]) }; }
 
+    async function generateAIAnalysis() {
+        if (!healthScore || !drivingStyle || !fuelEfficiency) return;
+        
+        setAiLoading(true);
+        setAiAnalysis(null);
+        
+        const timeLabel = { '24h': 'pastarąją dieną', '7d': 'pastarąją savaitę', '30d': 'pastarąjį mėnesį' }[timeRange];
+        const vehicle = selectedVehicle;
+        
+        // Build context for AI
+        const context = {
+            vehicle: `${vehicle?.brand} ${vehicle?.model} (${vehicle?.year || 'N/A'})`,
+            period: timeLabel,
+            healthScore: healthScore.score,
+            issues: healthScore.issues.map(i => `${i.param}: ${i.severity} (${i.pct.toFixed(1)}% laiko)`),
+            driving: {
+                ecoScore: drivingStyle.eco,
+                hardAccelerations: drivingStyle.ha,
+                hardBraking: drivingStyle.hb,
+                highRpmEvents: drivingStyle.hr,
+                overspeedEvents: drivingStyle.os,
+                idlePercent: drivingStyle.idle
+            },
+            fuel: {
+                avgConsumption: fuelEfficiency.avg?.toFixed(1),
+                minConsumption: fuelEfficiency.min?.toFixed(1),
+                maxConsumption: fuelEfficiency.max?.toFixed(1),
+                rating: fuelEfficiency.rating
+            },
+            trip: tripStats ? {
+                distance: tripStats.distance?.toFixed(1),
+                movingTime: tripStats.movingTime,
+                idleTime: tripStats.idleTime,
+                maxSpeed: tripStats.maxSpeed
+            } : null,
+            parameters: availableParams.map(p => {
+                const stats = getStats(p);
+                const param = OBD_PARAMS[p];
+                return {
+                    name: param.label,
+                    avg: stats?.avg?.toFixed(1),
+                    min: stats?.min?.toFixed(1),
+                    max: stats?.max?.toFixed(1),
+                    status: paramAlerts[p] || 'normal'
+                };
+            })
+        };
+
+        const prompt = `Esi automobilio diagnostikos ekspertas. Išanalizuok šiuos OBD-II duomenis ir pateik trumpą, naudingą apžvalgą lietuvių kalba.
+
+DUOMENYS:
+- Automobilis: ${context.vehicle}
+- Periodas: ${context.period}
+- Variklio sveikatos įvertinimas: ${context.healthScore}%
+- Aptiktos problemos: ${context.issues.length > 0 ? context.issues.join(', ') : 'Nėra'}
+
+VAIRAVIMO STILIUS:
+- Ekonomiškumo balas: ${context.driving.ecoScore}%
+- Staigūs pagreičiai: ${context.driving.hardAccelerations}
+- Staigūs stabdymai: ${context.driving.hardBraking}
+- Aukšti RPM (>4500): ${context.driving.highRpmEvents}
+- Greičio viršijimai (>130 km/h): ${context.driving.overspeedEvents}
+- Tuščios eigos laikas: ${context.driving.idlePercent}%
+
+KURO EFEKTYVUMAS:
+- Vidutinės sąnaudos: ${context.fuel.avgConsumption || 'N/A'} L/100km
+- Min/Max: ${context.fuel.minConsumption || 'N/A'} - ${context.fuel.maxConsumption || 'N/A'} L/100km
+- Įvertinimas: ${context.fuel.rating}
+
+${context.trip ? `KELIONĖS STATISTIKA:
+- Nuvažiuota: ${context.trip.distance} km
+- Judėjimo laikas: ${context.trip.movingTime} min
+- Tuščia eiga: ${context.trip.idleTime} min
+- Max greitis: ${context.trip.maxSpeed} km/h` : ''}
+
+PARAMETRŲ BŪSENA:
+${context.parameters.map(p => `- ${p.name}: vid. ${p.avg}, min ${p.min}, max ${p.max} [${p.status}]`).join('\n')}
+
+Pateik:
+1. Trumpą bendrą įvertinimą (2-3 sakiniai)
+2. 2-4 konkrečias rekomendacijas arba pastebėjimus su emoji
+3. Jei yra problemų - ką reikėtų patikrinti
+
+Formatas: paprastas tekstas, ne per ilgas (max 200 žodžių). Būk konkretus ir naudingas.`;
+
+        try {
+            const response = await fetch('https://api.anthropic.com/v1/messages', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    model: 'claude-sonnet-4-20250514',
+                    max_tokens: 1000,
+                    messages: [{ role: 'user', content: prompt }]
+                })
+            });
+
+            if (!response.ok) throw new Error('API request failed');
+            
+            const data = await response.json();
+            const text = data.content?.find(c => c.type === 'text')?.text || 'Nepavyko sugeneruoti analizės.';
+            setAiAnalysis(text);
+        } catch (err) {
+            console.error('AI Analysis error:', err);
+            setAiAnalysis('❌ Nepavyko sugeneruoti AI analizės. Bandykite dar kartą.');
+        } finally {
+            setAiLoading(false);
+        }
+    }
+
     function exportCSV() {
         const h = ['Laikas', ...availableParams.map(p => OBD_PARAMS[p]?.label || p)];
         const r = telemetry.map(p => [p.timestamp.toLocaleString('lt-LT'), ...availableParams.map(k => p[k]?.toFixed(2) || '')]);
@@ -295,6 +406,40 @@ function OBDPage() {
                                 <div className="fuel-stat"><span>🏎️ Max greitis</span><span>{tripStats?.maxSpeed || '-'} km/h</span></div>
                             </div>
                         </div>
+                    </div>
+
+                    {/* AI Analysis Section */}
+                    <div className="obd-ai-section">
+                        <div className="ai-header">
+                            <h3>🤖 AI Apžvalga</h3>
+                            <button 
+                                className={`ai-generate-btn ${aiLoading ? 'loading' : ''}`} 
+                                onClick={generateAIAnalysis}
+                                disabled={aiLoading}
+                            >
+                                {aiLoading ? (<><span className="ai-spinner" /> Analizuojama...</>) : aiAnalysis ? (<>🔄 Atnaujinti</>) : (<>✨ Generuoti analizę</>)}
+                            </button>
+                        </div>
+                        
+                        {aiLoading && (
+                            <div className="ai-loading">
+                                <div className="ai-loading-bar" />
+                                <p>Claude analizuoja jūsų duomenis...</p>
+                            </div>
+                        )}
+                        
+                        {aiAnalysis && !aiLoading && (
+                            <div className="ai-content">
+                                {aiAnalysis.split('\n').map((line, i) => line.trim() && <p key={i}>{line}</p>)}
+                            </div>
+                        )}
+                        
+                        {!aiAnalysis && !aiLoading && (
+                            <div className="ai-placeholder">
+                                <span className="ai-placeholder-icon">🧠</span>
+                                <p>Paspauskite mygtuką, kad Claude išanalizuotų jūsų automobilio duomenis ir pateiktų personalizuotas įžvalgas bei rekomendacijas.</p>
+                            </div>
+                        )}
                     </div>
 
                     <div className="obd-export-section">
