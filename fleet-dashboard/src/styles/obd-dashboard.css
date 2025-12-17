@@ -151,23 +151,54 @@
 }
 
 .obd-card:hover {
-    border-color: rgba(102, 126, 234, 0.5);
     transform: translateY(-2px);
 }
 
 .obd-card.selected {
     background: rgba(102, 126, 234, 0.12);
-    border-color: var(--accent);
     box-shadow: 0 0 20px rgba(102, 126, 234, 0.15);
 }
 
-.obd-card.status-warning {
-    border-color: #f59e0b;
+/* Alert-based border colors (based on period history) */
+.obd-card.alert-normal {
+    border-color: rgba(34, 197, 94, 0.4);
 }
 
-.obd-card.status-critical {
+.obd-card.alert-normal:hover {
+    border-color: rgba(34, 197, 94, 0.7);
+}
+
+.obd-card.alert-normal.selected {
+    border-color: #22c55e;
+    box-shadow: 0 0 20px rgba(34, 197, 94, 0.2);
+}
+
+.obd-card.alert-warning {
+    border-color: rgba(245, 158, 11, 0.5);
+    background: rgba(245, 158, 11, 0.05);
+}
+
+.obd-card.alert-warning:hover {
+    border-color: rgba(245, 158, 11, 0.8);
+}
+
+.obd-card.alert-warning.selected {
+    border-color: #f59e0b;
+    box-shadow: 0 0 20px rgba(245, 158, 11, 0.25);
+}
+
+.obd-card.alert-critical {
+    border-color: rgba(239, 68, 68, 0.5);
+    background: rgba(239, 68, 68, 0.05);
+}
+
+.obd-card.alert-critical:hover {
+    border-color: rgba(239, 68, 68, 0.8);
+}
+
+.obd-card.alert-critical.selected {
     border-color: #ef4444;
-    box-shadow: 0 0 15px rgba(239, 68, 68, 0.2);
+    box-shadow: 0 0 20px rgba(239, 68, 68, 0.25);
 }
 
 .obd-card-status-dot {
