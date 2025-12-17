@@ -1,8 +1,3 @@
-// =============================================
-// DASHBOARD PAGE - FULLY FUNCTIONAL
-// Fleet Tracking Dashboard
-// =============================================
-
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import DashboardLayout from "../layout/DashboardLayout";
@@ -392,6 +387,7 @@ function Dashboard() {
                     </div>
                 </div>
             </div>
+
         </DashboardLayout>
     );
 }
