@@ -125,18 +125,18 @@
 
 .obd-main-grid {
     display: grid;
-    grid-template-columns: 380px 1fr;
+    grid-template-columns: 480px 1fr;
     gap: 24px;
     align-items: start;
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   CARDS GRID (LEFT SIDE)
+   CARDS GRID (LEFT SIDE) - 3 columns
    ═══════════════════════════════════════════════════════════════ */
 
 .obd-cards-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(3, 1fr);
     gap: 12px;
 }
 
@@ -375,10 +375,20 @@
    RESPONSIVE
    ═══════════════════════════════════════════════════════════════ */
 
+@media (max-width: 1400px) {
+    .obd-main-grid {
+        grid-template-columns: 420px 1fr;
+        gap: 20px;
+    }
+}
+
 @media (max-width: 1200px) {
     .obd-main-grid {
-        grid-template-columns: 340px 1fr;
-        gap: 20px;
+        grid-template-columns: 360px 1fr;
+    }
+    
+    .obd-cards-grid {
+        grid-template-columns: repeat(2, 1fr);
     }
 }
 
@@ -388,7 +398,7 @@
     }
     
     .obd-cards-grid {
-        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+        grid-template-columns: repeat(3, 1fr);
     }
     
     .obd-chart-panel {
@@ -415,7 +425,7 @@
     }
 
     .obd-cards-grid {
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: repeat(2, 1fr);
         gap: 10px;
     }
 
@@ -447,23 +457,7 @@
 
 @media (max-width: 480px) {
     .obd-cards-grid {
-        grid-template-columns: 1fr;
-    }
-
-    .obd-card {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        padding: 14px;
-    }
-
-    .obd-card-icon {
-        font-size: 28px;
-        margin-bottom: 0;
-    }
-
-    .obd-card-label {
-        margin-bottom: 2px;
+        grid-template-columns: 1fr 1fr;
     }
 
     .time-btn {
