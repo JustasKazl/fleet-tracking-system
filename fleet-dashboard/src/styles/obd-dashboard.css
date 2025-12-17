@@ -1,303 +1,488 @@
 /* ═══════════════════════════════════════════════════════════════
    OBD DASHBOARD PAGE STYLES
+   Full width layout with 2-column cards + chart
    ═══════════════════════════════════════════════════════════════ */
 
 .obd-dashboard-page {
-  padding: 32px;
-  max-width: 1400px;
-  margin: 0 auto;
+    padding: 24px;
 }
 
-/* Header */
+/* ═══════════════════════════════════════════════════════════════
+   HEADER
+   ═══════════════════════════════════════════════════════════════ */
+
 .obd-header {
-  display: flex;
-  align-items: center;
-  gap: 24px;
-  margin-bottom: 32px;
-  flex-wrap: wrap;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
 }
 
 .obd-title-section {
-  flex: 1;
+    flex: 1;
+    min-width: 200px;
 }
 
 .obd-title {
-  font-size: 28px;
-  font-weight: 700;
-  color: var(--text-main);
-  margin: 0 0 4px 0;
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text-main);
+    margin: 0 0 4px 0;
 }
 
 .obd-subtitle {
-  font-size: 14px;
-  color: var(--text-muted);
-  margin: 0;
+    font-size: 13px;
+    color: var(--text-muted);
+    margin: 0;
+}
+
+.obd-vehicle-select {
+    padding: 10px 14px;
+    background: rgba(26, 15, 46, 0.6);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-main);
+    font-size: 13px;
+    min-width: 200px;
+    cursor: pointer;
+    transition: border-color 0.2s;
+}
+
+.obd-vehicle-select:hover {
+    border-color: var(--accent);
+}
+
+.obd-vehicle-select:focus {
+    outline: none;
+    border-color: var(--accent);
 }
 
 .obd-time-selector {
-  display: flex;
-  gap: 4px;
-  background: rgba(10, 1, 24, 0.4);
-  padding: 4px;
-  border-radius: 8px;
-  border: 1px solid var(--border-light);
+    display: flex;
+    background: rgba(26, 15, 46, 0.4);
+    border-radius: 8px;
+    padding: 4px;
+    border: 1px solid var(--border-light);
 }
 
 .time-btn {
-  padding: 8px 16px;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
+    padding: 8px 16px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
 }
 
 .time-btn:hover {
-  background: rgba(102, 126, 234, 0.1);
-  color: var(--text-main);
+    background: rgba(102, 126, 234, 0.1);
+    color: var(--text-main);
 }
 
 .time-btn.active {
-  background: linear-gradient(135deg, var(--accent), var(--accent-alt));
-  color: white;
+    background: linear-gradient(135deg, var(--accent), var(--accent-alt));
+    color: white;
 }
 
-/* Loading & Empty States */
+/* ═══════════════════════════════════════════════════════════════
+   LOADING & EMPTY STATES
+   ═══════════════════════════════════════════════════════════════ */
+
 .obd-loading,
 .obd-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 80px 20px;
-  text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 80px 20px;
+    text-align: center;
 }
 
 .obd-loading p,
 .obd-empty p {
-  color: var(--text-muted);
-  margin-top: 16px;
+    color: var(--text-muted);
+    margin-top: 16px;
 }
 
 .obd-empty .empty-icon {
-  font-size: 64px;
-  opacity: 0.5;
-  margin-bottom: 16px;
+    font-size: 64px;
+    opacity: 0.4;
+    margin-bottom: 16px;
 }
 
 .obd-empty h3 {
-  color: var(--text-main);
-  margin: 0 0 8px 0;
+    color: var(--text-main);
+    margin: 0 0 8px 0;
 }
 
-/* Gauges Grid */
-.obd-gauges-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 16px;
-  margin-bottom: 32px;
+/* ═══════════════════════════════════════════════════════════════
+   MAIN GRID LAYOUT
+   ═══════════════════════════════════════════════════════════════ */
+
+.obd-main-grid {
+    display: grid;
+    grid-template-columns: 380px 1fr;
+    gap: 24px;
+    align-items: start;
 }
 
-.obd-gauge-card {
-  background: rgba(26, 15, 46, 0.5);
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-  padding: 20px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
+/* ═══════════════════════════════════════════════════════════════
+   CARDS GRID (LEFT SIDE)
+   ═══════════════════════════════════════════════════════════════ */
 
-.obd-gauge-card:hover {
-  border-color: rgba(102, 126, 234, 0.4);
-  transform: translateY(-2px);
-}
-
-.obd-gauge-card.selected {
-  border-color: var(--accent);
-  box-shadow: 0 0 20px rgba(102, 126, 234, 0.2);
-}
-
-.gauge-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-
-.gauge-icon {
-  font-size: 20px;
-}
-
-.gauge-label {
-  font-size: 12px;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  font-weight: 600;
-}
-
-.gauge-value {
-  font-size: 32px;
-  font-weight: 700;
-  font-family: 'Monaco', 'Courier New', monospace;
-  margin-bottom: 12px;
-}
-
-.gauge-unit {
-  font-size: 14px;
-  font-weight: 400;
-  margin-left: 4px;
-  opacity: 0.7;
-}
-
-.gauge-bar {
-  height: 6px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 3px;
-  overflow: hidden;
-  margin-bottom: 12px;
-}
-
-.gauge-bar-fill {
-  height: 100%;
-  border-radius: 3px;
-  transition: width 0.3s ease;
-}
-
-.gauge-stats {
-  display: flex;
-  justify-content: space-between;
-  font-size: 11px;
-  color: var(--text-muted);
-}
-
-/* Chart Section */
-.obd-chart-section {
-  background: rgba(26, 15, 46, 0.5);
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-  padding: 24px;
-  margin-bottom: 32px;
-}
-
-.chart-title {
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--text-main);
-  margin: 0 0 20px 0;
-}
-
-.obd-chart-canvas {
-  width: 100%;
-  height: 300px;
-  display: block;
-  border-radius: 8px;
-}
-
-/* DTC Section */
-.obd-dtc-section {
-  background: rgba(26, 15, 46, 0.5);
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-  padding: 24px;
-  margin-bottom: 24px;
-}
-
-.section-title {
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--text-main);
-  margin: 0 0 16px 0;
-}
-
-.dtc-status {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 16px;
-  background: rgba(59, 242, 140, 0.1);
-  border: 1px solid rgba(59, 242, 140, 0.2);
-  border-radius: 8px;
-  color: var(--good);
-  font-size: 14px;
-}
-
-.dtc-icon {
-  font-size: 20px;
-}
-
-.dtc-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.dtc-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  background: rgba(242, 68, 68, 0.1);
-  border: 1px solid rgba(242, 68, 68, 0.2);
-  border-radius: 8px;
-}
-
-.dtc-code {
-  font-family: 'Monaco', monospace;
-  font-weight: 700;
-  color: var(--bad);
-}
-
-.dtc-description {
-  font-size: 13px;
-  color: var(--text-muted);
-}
-
-/* Footer */
-.obd-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding-top: 16px;
-  border-top: 1px solid var(--border-light);
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
-/* Responsive */
-@media (max-width: 768px) {
-  .obd-dashboard-page {
-    padding: 20px;
-  }
-
-  .obd-header {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .obd-time-selector {
-    width: 100%;
-    justify-content: center;
-  }
-
-  .obd-gauges-grid {
+.obd-cards-grid {
+    display: grid;
     grid-template-columns: 1fr 1fr;
-  }
+    gap: 12px;
+}
 
-  .gauge-value {
+.obd-card {
+    position: relative;
+    padding: 16px;
+    background: rgba(26, 15, 46, 0.5);
+    border: 2px solid var(--border-color);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.obd-card:hover {
+    border-color: rgba(102, 126, 234, 0.5);
+    transform: translateY(-2px);
+}
+
+.obd-card.selected {
+    background: rgba(102, 126, 234, 0.12);
+    border-color: var(--accent);
+    box-shadow: 0 0 20px rgba(102, 126, 234, 0.15);
+}
+
+.obd-card.status-warning {
+    border-color: #f59e0b;
+}
+
+.obd-card.status-critical {
+    border-color: #ef4444;
+    box-shadow: 0 0 15px rgba(239, 68, 68, 0.2);
+}
+
+.obd-card-status-dot {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+
+.obd-card-status-dot.pulse {
+    animation: pulse 1s infinite;
+}
+
+.obd-card-icon {
     font-size: 24px;
-  }
+    margin-bottom: 8px;
+}
 
-  .obd-chart-canvas {
-    height: 220px;
-  }
+.obd-card-label {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+    line-height: 1.3;
+}
+
+.obd-card-value {
+    font-size: 28px;
+    font-weight: 700;
+    font-family: 'Monaco', 'Consolas', monospace;
+}
+
+.obd-card-unit {
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--text-muted);
+    margin-left: 4px;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   CHART PANEL (RIGHT SIDE)
+   ═══════════════════════════════════════════════════════════════ */
+
+.obd-chart-panel {
+    background: rgba(26, 15, 46, 0.5);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 20px;
+    min-height: 450px;
+    display: flex;
+    flex-direction: column;
+}
+
+.obd-chart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.obd-chart-title-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.obd-chart-icon {
+    font-size: 26px;
+}
+
+.obd-chart-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-main);
+}
+
+.obd-status-badge {
+    font-size: 11px;
+    padding: 5px 12px;
+    border-radius: 12px;
+    font-weight: 600;
+}
+
+.obd-status-badge.status-normal {
+    background: rgba(34, 197, 94, 0.15);
+    color: #22c55e;
+}
+
+.obd-status-badge.status-warning {
+    background: rgba(245, 158, 11, 0.15);
+    color: #f59e0b;
+}
+
+.obd-status-badge.status-critical {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+}
+
+.obd-chart-stats {
+    display: flex;
+    gap: 28px;
+}
+
+.obd-stat {
+    text-align: center;
+}
+
+.obd-stat-label {
+    font-size: 10px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 2px;
+}
+
+.obd-stat-value {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-main);
+}
+
+.obd-chart-container {
+    flex: 1;
+    position: relative;
+    min-height: 300px;
+}
+
+.obd-chart-canvas-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.obd-chart-canvas-container canvas {
+    display: block;
+    border-radius: 8px;
+}
+
+.obd-chart-empty {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    font-size: 14px;
+}
+
+.obd-chart-legend {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border-light);
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.legend-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+}
+
+.legend-dot.normal {
+    background: #22c55e;
+}
+
+.legend-dot.warning {
+    background: #f59e0b;
+}
+
+.legend-dot.critical {
+    background: #ef4444;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   FOOTER
+   ═══════════════════════════════════════════════════════════════ */
+
+.obd-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 20px;
+    padding: 12px 16px;
+    background: rgba(26, 15, 46, 0.3);
+    border-radius: 8px;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   RESPONSIVE
+   ═══════════════════════════════════════════════════════════════ */
+
+@media (max-width: 1200px) {
+    .obd-main-grid {
+        grid-template-columns: 340px 1fr;
+        gap: 20px;
+    }
+}
+
+@media (max-width: 992px) {
+    .obd-main-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .obd-cards-grid {
+        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    }
+    
+    .obd-chart-panel {
+        min-height: 400px;
+    }
+}
+
+@media (max-width: 768px) {
+    .obd-dashboard-page {
+        padding: 16px;
+    }
+
+    .obd-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .obd-vehicle-select {
+        width: 100%;
+    }
+
+    .obd-time-selector {
+        justify-content: center;
+    }
+
+    .obd-cards-grid {
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+    }
+
+    .obd-card {
+        padding: 12px;
+    }
+
+    .obd-card-icon {
+        font-size: 20px;
+    }
+
+    .obd-card-value {
+        font-size: 22px;
+    }
+
+    .obd-chart-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .obd-chart-stats {
+        gap: 16px;
+    }
+
+    .obd-chart-container {
+        min-height: 250px;
+    }
 }
 
 @media (max-width: 480px) {
-  .obd-gauges-grid {
-    grid-template-columns: 1fr;
-  }
+    .obd-cards-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .obd-card {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 14px;
+    }
+
+    .obd-card-icon {
+        font-size: 28px;
+        margin-bottom: 0;
+    }
+
+    .obd-card-label {
+        margin-bottom: 2px;
+    }
+
+    .time-btn {
+        padding: 6px 12px;
+        font-size: 12px;
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ANIMATIONS
+   ═══════════════════════════════════════════════════════════════ */
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.5;
+        transform: scale(1.2);
+    }
 }
