@@ -56,6 +56,8 @@ function DashboardLayout({ children }) {
       navigate("/trips");
     } else if (target === "alerts") {
       navigate("/alerts");
+    } else if (target === "obd") {
+      navigate("/obd");
     } else if (target === "reports") {
       showToast("Nebaigta - netrukus bus prieinamas", "warning");
     } else if (target === "settings") {
@@ -149,10 +151,18 @@ function DashboardLayout({ children }) {
               
               <button
                 type="button"
-                className="sidebar-item"
+                className={`sidebar-item ${isActive("/alerts") ? "sidebar-item-active" : ""}`}
                 onClick={() => handleSidebarItemClick("alerts")}
               >
                 🔔 Įspėjimai
+              </button>
+
+              <button
+                type="button"
+                className={`sidebar-item ${isActive("/obd") ? "sidebar-item-active" : ""}`}
+                onClick={() => handleSidebarItemClick("obd")}
+              >
+                🔧 OBD-II Diagnostika
               </button>
               
               <button
@@ -208,11 +218,13 @@ function DashboardLayout({ children }) {
               {location.pathname === "/vehicles" && "Transporto priemonių sąrašas"}
               {location.pathname === "/vehicles/add" && "Pridėti naują automobilį"}
               {location.pathname.includes("/vehicles/edit/") && "Redaguoti automobilį"}
-              {location.pathname.includes("/vehicles/") && !location.pathname.includes("/edit") && location.pathname !== "/vehicles/add" && "Transporto priemonės detalės"}
+              {location.pathname.includes("/vehicles/") && !location.pathname.includes("/edit") && location.pathname !== "/vehicles/add" && !location.pathname.includes("/obd") && "Transporto priemonės detalės"}
               {location.pathname === "/trips" && "Kelionių istorija"}
+              {location.pathname === "/alerts" && "Įspėjimai"}
+              {location.pathname === "/obd" && "OBD-II Diagnostika"}
+              {location.pathname.includes("/obd") && "OBD-II Diagnostika"}
               {location.pathname === "/profile" && "Profilio nustatymai"}
               {location.pathname === "/settings" && "Sistemos nustatymai"}
-              {!location.pathname.startsWith("/vehicles") && !location.pathname.startsWith("/dashboard") && !location.pathname.startsWith("/profile") && !location.pathname.startsWith("/settings") && "Valdymo skydelis"}
             </div>
           </div>
         </div>
