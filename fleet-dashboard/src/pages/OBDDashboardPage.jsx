@@ -69,16 +69,97 @@ function OBDPage() {
 
     function calcHealth(data) {
         if (!data.length) return null;
-        let score = 100; const issues = [];
-        Object.keys(OBD_PARAMS).forEach(p => {
-            const pm = OBD_PARAMS[p]; if (!pm.thresholds) return;
-            const vals = data.map(d => d[p]).filter(v => v !== undefined); if (!vals.length) return;
-            let w = 0, c = 0; vals.forEach(v => { const s = getValueStatus(v, pm); if (s === 'warning') w++; if (s === 'critical') c++; });
-            const wp = (w/vals.length)*100, cp = (c/vals.length)*100;
-            if (cp > 5) { issues.push({ param: pm.label, severity: 'critical', pct: cp }); score -= cp * 1.5; }
-            else if (wp > 10) { issues.push({ param: pm.label, severity: 'warning', pct: wp }); score -= wp * 0.3; }
+        
+        // Health score weights - what actually matters for engine health
+        // Higher weight = more impact on health score when in warning/critical
+        const healthWeights = {
+            // CRITICAL for engine health - these destroy engines
+            coolant_temp: { weight: 5.0, name: 'Aušinimo skystis', critical: true },
+            battery_voltage: { weight: 3.0, name: 'Akumuliatoriaus įtampa', critical: true },
+            
+            // IMPORTANT - indicates problems but less severe
+            engine_load: { weight: 1.5, name: 'Variklio apkrova', critical: false },
+            intake_air_temp: { weight: 1.0, name: 'Įsiurbiamo oro temp.', critical: false },
+            
+            // MINOR - high values are normal during driving, only prolonged extremes matter
+            rpm: { weight: 0.3, name: 'RPM', critical: false },
+            fuel_rate: { weight: 0.2, name: 'Kuro sąnaudos', critical: false },
+            
+            // INFORMATIONAL - doesn't affect engine health directly
+            fuel_level: { weight: 0.5, name: 'Kuro lygis', critical: false },
+            
+            // IGNORE for health - these are driving style, not engine health
+            speed_kmh: { weight: 0, name: 'Greitis', critical: false },
+            throttle: { weight: 0, name: 'Akseleratorius', critical: false },
+            maf: { weight: 0, name: 'MAF', critical: false },
+        };
+        
+        let score = 100;
+        const issues = [];
+        
+        Object.keys(OBD_PARAMS).forEach(param => {
+            const pm = OBD_PARAMS[param];
+            if (!pm.thresholds) return;
+            
+            const config = healthWeights[param];
+            if (!config || config.weight === 0) return; // Skip ignored params
+            
+            const vals = data.map(d => d[param]).filter(v => v !== undefined);
+            if (!vals.length) return;
+            
+            let warningCount = 0, criticalCount = 0;
+            vals.forEach(v => {
+                const status = getValueStatus(v, pm);
+                if (status === 'warning') warningCount++;
+                if (status === 'critical') criticalCount++;
+            });
+            
+            const warningPct = (warningCount / vals.length) * 100;
+            const criticalPct = (criticalCount / vals.length) * 100;
+            
+            // Calculate penalty based on severity and weight
+            let penalty = 0;
+            
+            if (criticalPct > 0) {
+                // Critical issues - heavy penalty, especially for critical params
+                penalty = criticalPct * config.weight * (config.critical ? 2.0 : 0.8);
+                
+                if (criticalPct > 1) { // More than 1% of time in critical
+                    issues.push({
+                        param: config.name,
+                        severity: 'critical',
+                        pct: criticalPct,
+                        weight: config.weight
+                    });
+                }
+            } else if (warningPct > 5) {
+                // Warning issues - moderate penalty, only if significant
+                penalty = warningPct * config.weight * 0.15;
+                
+                if (warningPct > 10) { // More than 10% of time in warning
+                    issues.push({
+                        param: config.name,
+                        severity: 'warning',
+                        pct: warningPct,
+                        weight: config.weight
+                    });
+                }
+            }
+            
+            score -= penalty;
         });
-        return { score: Math.max(0, Math.min(100, Math.round(score))), issues: issues.slice(0, 5) };
+        
+        // Sort issues by severity and weight
+        issues.sort((a, b) => {
+            if (a.severity === 'critical' && b.severity !== 'critical') return -1;
+            if (b.severity === 'critical' && a.severity !== 'critical') return 1;
+            return (b.pct * b.weight) - (a.pct * a.weight);
+        });
+        
+        return {
+            score: Math.max(0, Math.min(100, Math.round(score))),
+            issues: issues.slice(0, 5)
+        };
     }
 
     function calcDriving(data) {
