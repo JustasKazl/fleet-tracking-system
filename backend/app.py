@@ -12,6 +12,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import jwt
 import json
 from math import radians, cos, sin, asin, sqrt
+import requests as http_requests  # For Anthropic API calls
 
 # Configuration
 DATABASE_URL = os.environ.get('DATABASE_URL')
@@ -19,6 +20,7 @@ JWT_SECRET = os.environ.get('JWT_SECRET', 'your-secret-key-change-in-production'
 JWT_ALGORITHM = 'HS256'
 JWT_EXPIRATION_HOURS = 24
 TCP_PORT = int(os.environ.get('TCP_PORT', 5055))
+ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY')
 
 # Check if DATABASE_URL is set
 if not DATABASE_URL:
@@ -1147,6 +1149,102 @@ def api_delete_service(user_id, record_id):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# AI ANALYSIS ENDPOINT (Claude API)
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.route("/api/ai/analyze-obd", methods=["POST"])
+@require_auth
+def api_ai_analyze_obd(user_id):
+    """Generate AI analysis of OBD data using Claude"""
+    
+    if not ANTHROPIC_API_KEY:
+        return jsonify({'error': 'ANTHROPIC_API_KEY not configured. Add it to your environment variables.'}), 500
+    
+    data = request.json
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+    
+    # Build the prompt
+    prompt = f"""Esi automobilio diagnostikos ekspertas. Išanalizuok šiuos OBD-II duomenis ir pateik trumpą, naudingą apžvalgą lietuvių kalba.
+
+DUOMENYS:
+- Automobilis: {data.get('vehicle', 'N/A')}
+- Periodas: {data.get('period', 'N/A')}
+- Variklio sveikatos įvertinimas: {data.get('healthScore', 'N/A')}%
+- Aptiktos problemos: {', '.join(data.get('issues', [])) or 'Nėra'}
+
+VAIRAVIMO STILIUS:
+- Ekonomiškumo balas: {data.get('driving', {}).get('ecoScore', 'N/A')}%
+- Staigūs pagreičiai: {data.get('driving', {}).get('hardAccelerations', 'N/A')}
+- Staigūs stabdymai: {data.get('driving', {}).get('hardBraking', 'N/A')}
+- Aukšti RPM (>4500): {data.get('driving', {}).get('highRpmEvents', 'N/A')}
+- Greičio viršijimai (>130 km/h): {data.get('driving', {}).get('overspeedEvents', 'N/A')}
+- Tuščios eigos laikas: {data.get('driving', {}).get('idlePercent', 'N/A')}%
+
+KURO EFEKTYVUMAS:
+- Vidutinės sąnaudos: {data.get('fuel', {}).get('avgConsumption', 'N/A')} L/100km
+- Min/Max: {data.get('fuel', {}).get('minConsumption', 'N/A')} - {data.get('fuel', {}).get('maxConsumption', 'N/A')} L/100km
+- Įvertinimas: {data.get('fuel', {}).get('rating', 'N/A')}
+
+KELIONĖS STATISTIKA:
+- Nuvažiuota: {data.get('trip', {}).get('distance', 'N/A')} km
+- Judėjimo laikas: {data.get('trip', {}).get('movingTime', 'N/A')} min
+- Tuščia eiga: {data.get('trip', {}).get('idleTime', 'N/A')} min
+- Max greitis: {data.get('trip', {}).get('maxSpeed', 'N/A')} km/h
+
+PARAMETRŲ BŪSENA:
+{chr(10).join([f"- {p.get('name', 'N/A')}: vid. {p.get('avg', 'N/A')}, min {p.get('min', 'N/A')}, max {p.get('max', 'N/A')} [{p.get('status', 'normal')}]" for p in data.get('parameters', [])])}
+
+Pateik:
+1. Trumpą bendrą įvertinimą (2-3 sakiniai)
+2. 2-4 konkrečias rekomendacijas arba pastebėjimus su emoji
+3. Jei yra problemų - ką reikėtų patikrinti
+
+Formatas: paprastas tekstas, ne per ilgas (max 200 žodžių). Būk konkretus ir naudingas."""
+
+    try:
+        response = http_requests.post(
+            'https://api.anthropic.com/v1/messages',
+            headers={
+                'Content-Type': 'application/json',
+                'x-api-key': ANTHROPIC_API_KEY,
+                'anthropic-version': '2023-06-01'
+            },
+            json={
+                'model': 'claude-sonnet-4-20250514',
+                'max_tokens': 1000,
+                'messages': [{'role': 'user', 'content': prompt}]
+            },
+            timeout=30
+        )
+        
+        if response.status_code != 200:
+            error_data = response.json()
+            print(f"❌ Anthropic API error: {error_data}")
+            return jsonify({'error': error_data.get('error', {}).get('message', 'API error')}), response.status_code
+        
+        result = response.json()
+        
+        text = ''
+        for block in result.get('content', []):
+            if block.get('type') == 'text':
+                text += block.get('text', '')
+        
+        print(f"✅ AI analysis generated for user {user_id}")
+        return jsonify({'analysis': text})
+        
+    except http_requests.exceptions.Timeout:
+        print("❌ Anthropic API timeout")
+        return jsonify({'error': 'Užklausa užtruko per ilgai. Bandykite dar kartą.'}), 504
+    except http_requests.exceptions.RequestException as e:
+        print(f"❌ Anthropic API request error: {e}")
+        return jsonify({'error': f'Ryšio klaida: {str(e)}'}), 500
+    except Exception as e:
+        print(f"❌ AI analysis unexpected error: {e}")
+        return jsonify({'error': f'Netikėta klaida: {str(e)}'}), 500
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # ALERTS API ROUTES
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -1547,7 +1645,7 @@ def debug_columns():
 
 @app.route("/")
 def root():
-    return "Fleet backend running on PostgreSQL with Auth + Teltonika TCP + Alerts API", 200
+    return "Fleet backend running on PostgreSQL with Auth + Teltonika TCP + Alerts + AI Analysis API", 200
 
 # ══════════════════════════════════════════════════════════════════════════════
 # TRIP DETECTION & HISTORY (1-HOUR GAP BASED)
@@ -1792,8 +1890,13 @@ def api_get_vehicle_trips_summary(user_id, vehicle_id):
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("🚀 FLEETTRACK BACKEND STARTUP (WITH ALERTS)")
+    print("🚀 FLEETTRACK BACKEND STARTUP (WITH AI ANALYSIS)")
     print("=" * 60)
+    
+    if ANTHROPIC_API_KEY:
+        print(f"✅ ANTHROPIC_API_KEY configured")
+    else:
+        print("⚠️  ANTHROPIC_API_KEY not set - AI analysis will be disabled")
     
     try:
         print("\n1️⃣ Initializing database tables...")
