@@ -9,6 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '../layout/DashboardLayout';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import ConfirmModal from '../components/ConfirmModal';
 import API_BASE_URL from '../api';
 
 function AlertsPage() {
@@ -22,6 +23,14 @@ function AlertsPage() {
     
     // Only severity filter
     const [severityFilter, setSeverityFilter] = useState('');
+    
+    // Confirm modal state
+    const [confirmModal, setConfirmModal] = useState({
+        open: false,
+        title: '',
+        message: '',
+        onConfirm: null
+    });
 
     useEffect(() => {
         if (token) {
@@ -85,43 +94,58 @@ function AlertsPage() {
     }
 
     async function handleDelete(alertId) {
-        if (!confirm('Ar tikrai norite ištrinti šį įspėjimą?')) return;
-        
-        try {
-            const res = await fetch(`${API_BASE_URL}/api/alerts/${alertId}`, {
-                method: 'DELETE',
-                headers: { Authorization: `Bearer ${token}` }
-            });
+        setConfirmModal({
+            open: true,
+            title: 'Ištrinti įspėjimą?',
+            message: 'Ar tikrai norite ištrinti šį įspėjimą? Šis veiksmas negrįžtamas.',
+            onConfirm: async () => {
+                try {
+                    const res = await fetch(`${API_BASE_URL}/api/alerts/${alertId}`, {
+                        method: 'DELETE',
+                        headers: { Authorization: `Bearer ${token}` }
+                    });
 
-            if (res.ok) {
-                showToast('Įspėjimas ištrintas', 'success');
-                loadAlerts();
-                loadStats();
-            } else {
-                showToast('Nepavyko ištrinti', 'error');
+                    if (res.ok) {
+                        showToast('Įspėjimas ištrintas', 'success');
+                        loadAlerts();
+                        loadStats();
+                    } else {
+                        showToast('Nepavyko ištrinti', 'error');
+                    }
+                } catch (err) {
+                    showToast('Klaida', 'error');
+                }
+                setConfirmModal({ ...confirmModal, open: false });
             }
-        } catch (err) {
-            showToast('Klaida', 'error');
-        }
+        });
     }
 
     async function handleDeleteAll() {
-        if (!confirm('Ar tikrai norite ištrinti VISUS įspėjimus? Šis veiksmas negrįžtamas.')) return;
-        
-        try {
-            // Delete all alerts one by one
-            for (const alert of alerts) {
-                await fetch(`${API_BASE_URL}/api/alerts/${alert.id}`, {
-                    method: 'DELETE',
-                    headers: { Authorization: `Bearer ${token}` }
-                });
+        setConfirmModal({
+            open: true,
+            title: 'Ištrinti visus įspėjimus?',
+            message: `Ar tikrai norite ištrinti VISUS (${alerts.length}) įspėjimus? Šis veiksmas negrįžtamas.`,
+            onConfirm: async () => {
+                try {
+                    for (const alert of alerts) {
+                        await fetch(`${API_BASE_URL}/api/alerts/${alert.id}`, {
+                            method: 'DELETE',
+                            headers: { Authorization: `Bearer ${token}` }
+                        });
+                    }
+                    showToast('Visi įspėjimai ištrinti', 'success');
+                    loadAlerts();
+                    loadStats();
+                } catch (err) {
+                    showToast('Klaida', 'error');
+                }
+                setConfirmModal({ ...confirmModal, open: false });
             }
-            showToast('Visi įspėjimai ištrinti', 'success');
-            loadAlerts();
-            loadStats();
-        } catch (err) {
-            showToast('Klaida', 'error');
-        }
+        });
+    }
+
+    function closeConfirmModal() {
+        setConfirmModal({ ...confirmModal, open: false });
     }
 
     function getAlertIcon(type) {
@@ -323,6 +347,15 @@ function AlertsPage() {
                     </div>
                 )}
             </div>
+            
+            {/* Confirm Delete Modal */}
+            <ConfirmModal
+                open={confirmModal.open}
+                title={confirmModal.title}
+                message={confirmModal.message}
+                onConfirm={confirmModal.onConfirm}
+                onCancel={closeConfirmModal}
+            />
         </DashboardLayout>
     );
 }
