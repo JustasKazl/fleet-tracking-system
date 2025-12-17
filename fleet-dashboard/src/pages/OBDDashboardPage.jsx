@@ -66,10 +66,11 @@ function OBDPage() {
     const [loadingVehicles, setLoadingVehicles] = useState(true);
     const [telemetry, setTelemetry] = useState([]);
     const [loading, setLoading] = useState(false);
-    const [timeRange, setTimeRange] = useState("1h");
+    const [timeRange, setTimeRange] = useState("24h");
     const [availableParams, setAvailableParams] = useState([]);
     const [selectedParam, setSelectedParam] = useState(null);
     const [createdAlerts, setCreatedAlerts] = useState(new Set());
+    const [paramAlerts, setParamAlerts] = useState({}); // Track max severity per param
 
     useEffect(() => {
         if (!token) return;
@@ -113,15 +114,54 @@ function OBDPage() {
         const param = OBD_PARAMS[paramName];
         if (!param?.alertMessage) return;
         const status = getValueStatus(value, param);
+        
+        // Track the worst status for this parameter
+        if (status === 'critical' || status === 'warning') {
+            setParamAlerts(prev => {
+                const current = prev[paramName];
+                // Only upgrade: normal -> warning -> critical
+                if (!current || (current === 'warning' && status === 'critical')) {
+                    return { ...prev, [paramName]: status };
+                }
+                return prev;
+            });
+        }
+        
         if (status === 'critical') createAlert('critical', `obd_${paramName}`, param.alertMessage, { parameter: paramName, value, unit: param.unit });
         else if (status === 'warning') createAlert('warning', `obd_${paramName}`, param.alertMessage, { parameter: paramName, value, unit: param.unit });
+    }
+
+    // Check all telemetry points for alerts in the period
+    function analyzeAlertsInPeriod(telemetryData) {
+        const alerts = {};
+        
+        telemetryData.forEach(point => {
+            Object.keys(OBD_PARAMS).forEach(paramName => {
+                const value = point[paramName];
+                if (value === undefined) return;
+                
+                const param = OBD_PARAMS[paramName];
+                if (!param?.thresholds) return;
+                
+                const status = getValueStatus(value, param);
+                if (status === 'critical') {
+                    alerts[paramName] = 'critical';
+                } else if (status === 'warning' && alerts[paramName] !== 'critical') {
+                    alerts[paramName] = 'warning';
+                } else if (status === 'normal' && !alerts[paramName]) {
+                    alerts[paramName] = 'normal';
+                }
+            });
+        });
+        
+        setParamAlerts(alerts);
     }
 
     async function loadTelemetry() {
         if (!selectedVehicle?.imei) return;
         setLoading(true);
         try {
-            const limits = { "1h": 120, "6h": 720, "24h": 2880, "7d": 10000 };
+            const limits = { "24h": 2880, "7d": 10000, "30d": 20000 };
             const res = await fetch(`${API_BASE_URL}/api/telemetry/${selectedVehicle.imei}?limit=${limits[timeRange] || 120}`,
                 { headers: { Authorization: `Bearer ${token}` } });
             if (!res.ok) throw new Error("Failed");
@@ -132,6 +172,10 @@ function OBDPage() {
                 return { timestamp: new Date(point.received_at || point.timestamp), speed: point.speed, ...extractOBD(io) };
             }).reverse();
             setTelemetry(processed);
+            
+            // Analyze all points for alerts in this period
+            analyzeAlertsInPeriod(processed);
+            
             if (processed.length > 0) {
                 const latest = processed[processed.length - 1];
                 Object.keys(OBD_PARAMS).forEach(p => { if (latest[p] !== undefined) checkThresholds(p, latest[p]); });
@@ -193,13 +237,17 @@ function OBDPage() {
                     </select>
                     
                     <div className="obd-time-selector">
-                        {["1h", "6h", "24h", "7d"].map(t => (
+                        {[
+                            { key: "24h", label: "Diena" },
+                            { key: "7d", label: "Savaitė" },
+                            { key: "30d", label: "Mėnuo" }
+                        ].map(t => (
                             <button 
-                                key={t} 
-                                onClick={() => setTimeRange(t)} 
-                                className={`time-btn ${timeRange === t ? 'active' : ''}`}
+                                key={t.key} 
+                                onClick={() => setTimeRange(t.key)} 
+                                className={`time-btn ${timeRange === t.key ? 'active' : ''}`}
                             >
-                                {t}
+                                {t.label}
                             </button>
                         ))}
                     </div>
@@ -226,23 +274,24 @@ function OBDPage() {
                                 const stats = getStats(paramName);
                                 if (!param || !stats) return null;
                                 const isSelected = selectedParam === paramName;
-                                const color = statusColors[stats.status] || param.color;
+                                const periodAlert = paramAlerts[paramName] || 'normal';
+                                const alertColor = periodAlert === 'critical' ? '#ef4444' : periodAlert === 'warning' ? '#f59e0b' : '#22c55e';
                                 
                                 return (
                                     <div
                                         key={paramName}
                                         onClick={() => setSelectedParam(paramName)}
-                                        className={`obd-card ${isSelected ? 'selected' : ''} ${stats.status !== 'normal' ? `status-${stats.status}` : ''}`}
+                                        className={`obd-card ${isSelected ? 'selected' : ''} alert-${periodAlert}`}
                                     >
-                                        {stats.status !== 'normal' && (
+                                        {periodAlert !== 'normal' && (
                                             <div 
-                                                className={`obd-card-status-dot ${stats.status === 'critical' ? 'pulse' : ''}`}
-                                                style={{ background: color }}
+                                                className={`obd-card-status-dot ${periodAlert === 'critical' ? 'pulse' : ''}`}
+                                                style={{ background: alertColor }}
                                             />
                                         )}
                                         <div className="obd-card-icon">{param.icon}</div>
                                         <div className="obd-card-label">{param.label}</div>
-                                        <div className="obd-card-value" style={{ color }}>
+                                        <div className="obd-card-value" style={{ color: param.color }}>
                                             {stats.avg.toFixed(paramName === 'battery_voltage' ? 1 : 0)}
                                             <span className="obd-card-unit">{param.unit}</span>
                                         </div>
