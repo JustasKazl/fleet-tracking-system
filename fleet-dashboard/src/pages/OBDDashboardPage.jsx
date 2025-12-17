@@ -35,7 +35,7 @@ const OBD_PARAMS = {
         thresholds: { normal: { min: 25 }, warning: { min: 10 }, critical: { min: 0 } },
         alertMessage: "Žemas kuro lygis", inverted: true },
     battery_voltage: { label: "Akumuliatorius", unit: "V", icon: "🔋", color: "#22c55e", min: 10, max: 16,
-        thresholds: { normal: { min: 13.5 }, warning: { min: 12.0 }, critical: { min: 10 } },
+        thresholds: { normal: { min: 13 }, warning: { min: 11 }, critical: { min: 8 } },
         alertMessage: "Akumuliatoriaus įtampa per žema", inverted: true },
     fuel_rate: { label: "Kuro sąnaudos", unit: "L/100", icon: "📊", color: "#ec4899", min: 0, max: 30,
         thresholds: { normal: { max: 12 }, warning: { max: 18 }, critical: { max: 30 } },
