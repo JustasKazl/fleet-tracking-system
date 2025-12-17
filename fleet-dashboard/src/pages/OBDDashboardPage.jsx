@@ -59,26 +59,6 @@ function OBDPage() {
 
     // Track which alerts we've already created this session to avoid duplicates
     const [createdAlerts, setCreatedAlerts] = useState(new Set());
-    const [existingAlerts, setExistingAlerts] = useState(new Set());
-
-    // Load existing active alerts for this vehicle on mount
-    useEffect(() => {
-        async function loadExistingAlerts() {
-            if (!selectedVehicle || !token) return;
-            try {
-                const res = await fetch(`${API_BASE_URL}/api/alerts?vehicle_id=${selectedVehicle.id}&status=active`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                const data = await res.json();
-                // Create set of existing alert types for this vehicle
-                const existing = new Set(data.alerts?.map(a => a.alert_type) || []);
-                setExistingAlerts(existing);
-            } catch (err) {
-                console.error('Failed to load existing alerts:', err);
-            }
-        }
-        loadExistingAlerts();
-    }, [selectedVehicle, token]);
 
     async function analyzeAlerts(data) {
         const alerts = {};
@@ -105,52 +85,79 @@ function OBDPage() {
         setParamAlerts(alerts);
         
         // Create alerts in database for critical issues
-        if (selectedVehicle && token) {
-            for (const [param, eventData] of Object.entries(criticalEvents)) {
-                const alertType = `obd_${param}`;
+        if (!selectedVehicle || !token) return;
+        
+        // First, fetch existing active alerts to avoid duplicates
+        let existingAlertTypes = new Set();
+        try {
+            const existingRes = await fetch(`${API_BASE_URL}/api/alerts?vehicle_id=${selectedVehicle.id}&status=active`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const existingData = await existingRes.json();
+            existingAlertTypes = new Set(existingData.alerts?.map(a => a.alert_type) || []);
+        } catch (err) {
+            console.error('Failed to load existing alerts:', err);
+        }
+        
+        for (const [param, eventData] of Object.entries(criticalEvents)) {
+            const alertType = `obd_${param}`;
+            
+            // Skip if alert already exists in database (active)
+            if (existingAlertTypes.has(alertType)) {
+                console.log(`⏭️ Alert ${alertType} already exists, skipping`);
+                continue;
+            }
+            
+            // Skip if we already created this alert this session
+            if (createdAlerts.has(alertType)) {
+                console.log(`⏭️ Alert ${alertType} already created this session, skipping`);
+                continue;
+            }
+            
+            // Only create alert if critical happened more than 5 times (not just a spike)
+            if (eventData.count < 5) {
+                console.log(`⏭️ Alert ${alertType} only ${eventData.count} critical events, skipping`);
+                continue;
+            }
+            
+            const pm = eventData.param;
+            const pct = ((eventData.count / data.length) * 100).toFixed(1);
+            
+            console.log(`🔔 Creating alert: ${alertType} (${eventData.count} critical events)`);
+            
+            try {
+                const res = await fetch(`${API_BASE_URL}/api/alerts`, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}` 
+                    },
+                    body: JSON.stringify({
+                        vehicle_id: selectedVehicle.id,
+                        alert_type: alertType,
+                        severity: 'critical',
+                        title: pm.alertMessage || `${pm.label} kritinis lygis`,
+                        message: `${pm.label}: max ${eventData.maxValue.toFixed(1)}${pm.unit}, kritinis ${pct}% laiko (${eventData.count} kartų)`,
+                        metadata: {
+                            param,
+                            maxValue: eventData.maxValue,
+                            criticalCount: eventData.count,
+                            criticalPercent: parseFloat(pct),
+                            timeRange
+                        }
+                    })
+                });
                 
-                // Skip if alert already exists in database (active)
-                if (existingAlerts.has(alertType)) continue;
-                
-                // Skip if we already created this alert this session
-                if (createdAlerts.has(alertType)) continue;
-                
-                // Only create alert if critical happened more than 5 times (not just a spike)
-                if (eventData.count < 5) continue;
-                
-                const pm = eventData.param;
-                const pct = ((eventData.count / data.length) * 100).toFixed(1);
-                
-                try {
-                    await fetch(`${API_BASE_URL}/api/alerts`, {
-                        method: 'POST',
-                        headers: { 
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${token}` 
-                        },
-                        body: JSON.stringify({
-                            vehicle_id: selectedVehicle.id,
-                            alert_type: alertType,
-                            severity: 'critical',
-                            title: pm.alertMessage || `${pm.label} kritinis lygis`,
-                            message: `${pm.label}: max ${eventData.maxValue.toFixed(1)}${pm.unit}, kritinis ${pct}% laiko (${eventData.count} kartų)`,
-                            metadata: {
-                                param,
-                                maxValue: eventData.maxValue,
-                                criticalCount: eventData.count,
-                                criticalPercent: parseFloat(pct),
-                                timeRange
-                            }
-                        })
-                    });
-                    
-                    // Mark as created (both in session and existing)
+                if (res.ok) {
+                    // Mark as created
                     setCreatedAlerts(prev => new Set([...prev, alertType]));
-                    setExistingAlerts(prev => new Set([...prev, alertType]));
                     console.log(`✅ Alert created: ${pm.label}`);
-                } catch (err) {
-                    console.error('Failed to create alert:', err);
+                } else {
+                    const errData = await res.json();
+                    console.error(`❌ Failed to create alert: ${errData.error}`);
                 }
+            } catch (err) {
+                console.error('Failed to create alert:', err);
             }
         }
     }
