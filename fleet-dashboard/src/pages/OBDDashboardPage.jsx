@@ -43,6 +43,7 @@ function OBDPage() {
     const [healthScore, setHealthScore] = useState(null);
     const [drivingStyle, setDrivingStyle] = useState(null);
     const [fuelEfficiency, setFuelEfficiency] = useState(null);
+    const [tripStats, setTripStats] = useState(null);
 
     useEffect(() => {
         if (!token) return;
@@ -98,14 +99,81 @@ function OBDPage() {
         return { avg, min: rates.length ? Math.min(...rates) : null, max: rates.length ? Math.max(...rates) : null, used: levels.length >= 2 ? Math.max(0, levels[0]-levels[levels.length-1]) : null, rating: avg === null ? 'average' : avg > 15 ? 'poor' : avg > 10 ? 'average' : 'good' };
     }
 
+    // Calculate distance using Haversine formula
+    function calcTripStats(data) {
+        if (data.length < 2) return null;
+        
+        let totalDistance = 0;
+        let movingTime = 0;
+        let idleTime = 0;
+        let maxSpeed = 0;
+        let totalFuelUsed = 0;
+        
+        for (let i = 1; i < data.length; i++) {
+            const prev = data[i-1], curr = data[i];
+            
+            // Distance calculation from GPS (if lat/lng available) or speed*time
+            if (prev.latitude && prev.longitude && curr.latitude && curr.longitude) {
+                totalDistance += haversine(prev.latitude, prev.longitude, curr.latitude, curr.longitude);
+            } else if (curr.speed_kmh !== undefined && curr.speed_kmh > 0) {
+                // Estimate from speed (assuming ~30 sec between points)
+                const timeDiff = (curr.timestamp - prev.timestamp) / 1000 / 3600; // hours
+                totalDistance += curr.speed_kmh * timeDiff;
+            }
+            
+            // Time tracking
+            const timeDiffMin = (curr.timestamp - prev.timestamp) / 1000 / 60;
+            if (curr.speed_kmh > 5) {
+                movingTime += timeDiffMin;
+            } else {
+                idleTime += timeDiffMin;
+            }
+            
+            // Max speed
+            if (curr.speed_kmh > maxSpeed) maxSpeed = curr.speed_kmh;
+        }
+        
+        // Fuel used from level change
+        const levels = data.map(p => p.fuel_level).filter(v => v !== undefined);
+        if (levels.length >= 2) {
+            totalFuelUsed = Math.max(0, levels[0] - levels[levels.length - 1]);
+        }
+        
+        // Calculate actual L/100km
+        const actualConsumption = totalDistance > 1 && totalFuelUsed > 0 
+            ? (totalFuelUsed / 100) * (50 / totalDistance) * 100 // Assuming 50L tank
+            : null;
+        
+        return {
+            distance: totalDistance,
+            movingTime: Math.round(movingTime),
+            idleTime: Math.round(idleTime),
+            maxSpeed: Math.round(maxSpeed),
+            fuelUsedPercent: totalFuelUsed,
+            actualConsumption
+        };
+    }
+
+    // Haversine formula for distance between two GPS points
+    function haversine(lat1, lon1, lat2, lon2) {
+        const R = 6371; // Earth radius in km
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                  Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                  Math.sin(dLon/2) * Math.sin(dLon/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        return R * c;
+    }
+
     async function loadTelemetry() {
         setLoading(true);
         try {
             const limits = { "24h": 2880, "7d": 10000, "30d": 20000 };
             const res = await fetch(`${API_BASE_URL}/api/telemetry/${selectedVehicle.imei}?limit=${limits[timeRange]}`, { headers: { Authorization: `Bearer ${token}` } });
             const data = await res.json();
-            const proc = data.map(p => { let io = p.io_elements; if (typeof io === "string") try { io = JSON.parse(io); } catch { io = {}; } return { timestamp: new Date(p.received_at || p.timestamp), speed: p.speed, ...extractOBD(io) }; }).reverse();
-            setTelemetry(proc); analyzeAlerts(proc); setHealthScore(calcHealth(proc)); setDrivingStyle(calcDriving(proc)); setFuelEfficiency(calcFuel(proc));
+            const proc = data.map(p => { let io = p.io_elements; if (typeof io === "string") try { io = JSON.parse(io); } catch { io = {}; } return { timestamp: new Date(p.received_at || p.timestamp), speed: p.speed, latitude: p.latitude, longitude: p.longitude, ...extractOBD(io) }; }).reverse();
+            setTelemetry(proc); analyzeAlerts(proc); setHealthScore(calcHealth(proc)); setDrivingStyle(calcDriving(proc)); setFuelEfficiency(calcFuel(proc)); setTripStats(calcTripStats(proc));
             const params = new Set(); proc.forEach(p => Object.keys(OBD_PARAMS).forEach(k => { if (p[k] !== undefined) params.add(k); }));
             const pl = Array.from(params); setAvailableParams(pl); if (!selectedParam && pl.length) setSelectedParam(pl[0]);
         } catch (e) { console.error(e); } finally { setLoading(false); }
@@ -203,12 +271,28 @@ function OBDPage() {
 
                         <div className="obd-analytics-card fuel-card">
                             <h3>⛽ Kuro Efektyvumas</h3>
-                            <div className={`fuel-rating ${fuelEfficiency?.rating||'average'}`}>{fuelEfficiency?.rating==='good'?'✓ Geras':fuelEfficiency?.rating==='average'?'◐ Vidutinis':'✗ Blogas'}</div>
-                            <div className="fuel-main"><span className="fuel-value">{fuelEfficiency?.avg?.toFixed(1)||'-'}</span><span className="fuel-unit">L/100km</span></div>
+                            <div className="fuel-gauge-container">
+                                <FuelGauge value={fuelEfficiency?.avg} optimal={8} max={20} />
+                            </div>
+                            <div className="fuel-comparison">
+                                <div className="fuel-comp-item">
+                                    <span className="comp-label">OBD vidurkis</span>
+                                    <span className="comp-value">{fuelEfficiency?.avg?.toFixed(1) || '-'}</span>
+                                    <span className="comp-unit">L/100km</span>
+                                </div>
+                                <div className="fuel-comp-divider">vs</div>
+                                <div className="fuel-comp-item">
+                                    <span className="comp-label">Pagal nuvažiuota</span>
+                                    <span className="comp-value actual">{tripStats?.actualConsumption?.toFixed(1) || '-'}</span>
+                                    <span className="comp-unit">L/100km</span>
+                                </div>
+                            </div>
                             <div className="fuel-stats">
-                                <div className="fuel-stat"><span>Min</span><span className="good">{fuelEfficiency?.min?.toFixed(1)||'-'}</span></div>
-                                <div className="fuel-stat"><span>Max</span><span className="bad">{fuelEfficiency?.max?.toFixed(1)||'-'}</span></div>
-                                <div className="fuel-stat"><span>Sunaudota</span><span>{fuelEfficiency?.used?.toFixed(0)||'-'}%</span></div>
+                                <div className="fuel-stat"><span>📏 Atstumas</span><span>{tripStats?.distance?.toFixed(1) || '-'} km</span></div>
+                                <div className="fuel-stat"><span>⛽ Sunaudota</span><span>{tripStats?.fuelUsedPercent?.toFixed(0) || '-'}%</span></div>
+                                <div className="fuel-stat"><span>🚗 Judėjimas</span><span>{tripStats?.movingTime || '-'} min</span></div>
+                                <div className="fuel-stat"><span>⏸️ Tuščia eiga</span><span>{tripStats?.idleTime || '-'} min</span></div>
+                                <div className="fuel-stat"><span>🏎️ Max greitis</span><span>{tripStats?.maxSpeed || '-'} km/h</span></div>
                             </div>
                         </div>
                     </div>
@@ -224,6 +308,110 @@ function OBDPage() {
             </div>
         </DashboardLayout>
     );
+}
+
+// Fuel Gauge Component
+function FuelGauge({ value, optimal = 8, max = 20 }) {
+    const canvasRef = useRef(null);
+    
+    useEffect(() => {
+        if (!canvasRef.current) return;
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext('2d');
+        const dpr = window.devicePixelRatio || 1;
+        const size = 180;
+        
+        canvas.width = size * dpr;
+        canvas.height = (size * 0.65) * dpr;
+        canvas.style.width = size + 'px';
+        canvas.style.height = (size * 0.65) + 'px';
+        ctx.scale(dpr, dpr);
+        
+        const cx = size / 2;
+        const cy = size * 0.55;
+        const radius = size * 0.4;
+        const startAngle = Math.PI;
+        const endAngle = 2 * Math.PI;
+        
+        // Background arc
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius, startAngle, endAngle);
+        ctx.lineWidth = 16;
+        ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+        ctx.lineCap = 'round';
+        ctx.stroke();
+        
+        // Colored segments
+        const segments = [
+            { start: 0, end: 0.4, color: '#22c55e' },      // Good (0-8 L/100)
+            { start: 0.4, end: 0.6, color: '#f59e0b' },    // Average (8-12 L/100)
+            { start: 0.6, end: 1, color: '#ef4444' }       // Poor (12-20 L/100)
+        ];
+        
+        segments.forEach(seg => {
+            ctx.beginPath();
+            ctx.arc(cx, cy, radius, startAngle + seg.start * Math.PI, startAngle + seg.end * Math.PI);
+            ctx.lineWidth = 16;
+            ctx.strokeStyle = seg.color + '40';
+            ctx.lineCap = 'butt';
+            ctx.stroke();
+        });
+        
+        // Value arc
+        if (value !== null && value !== undefined) {
+            const valuePercent = Math.min(1, Math.max(0, value / max));
+            const valueAngle = startAngle + valuePercent * Math.PI;
+            const valueColor = value <= optimal ? '#22c55e' : value <= 12 ? '#f59e0b' : '#ef4444';
+            
+            ctx.beginPath();
+            ctx.arc(cx, cy, radius, startAngle, valueAngle);
+            ctx.lineWidth = 16;
+            ctx.strokeStyle = valueColor;
+            ctx.lineCap = 'round';
+            ctx.stroke();
+            
+            // Needle
+            const needleAngle = valueAngle - Math.PI / 2;
+            const needleLength = radius - 25;
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.lineTo(cx + Math.cos(needleAngle + Math.PI/2) * needleLength, cy + Math.sin(needleAngle + Math.PI/2) * needleLength);
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = '#fff';
+            ctx.lineCap = 'round';
+            ctx.stroke();
+            
+            // Center dot
+            ctx.beginPath();
+            ctx.arc(cx, cy, 8, 0, Math.PI * 2);
+            ctx.fillStyle = valueColor;
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(cx, cy, 4, 0, Math.PI * 2);
+            ctx.fillStyle = '#fff';
+            ctx.fill();
+        }
+        
+        // Labels
+        ctx.fillStyle = 'rgba(184,180,212,0.7)';
+        ctx.font = '10px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('0', cx - radius - 5, cy + 15);
+        ctx.fillText(max.toString(), cx + radius + 5, cy + 15);
+        ctx.fillText(optimal.toString(), cx - radius * 0.7, cy - radius * 0.5);
+        
+        // Value text
+        if (value !== null && value !== undefined) {
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 24px Monaco, monospace';
+            ctx.fillText(value.toFixed(1), cx, cy + 5);
+            ctx.font = '11px sans-serif';
+            ctx.fillStyle = 'rgba(184,180,212,0.8)';
+            ctx.fillText('L/100km', cx, cy + 20);
+        }
+    }, [value, optimal, max]);
+    
+    return <canvas ref={canvasRef} />;
 }
 
 function OBDChart({data,paramName,paramConfig}){const canvasRef=useRef(null),containerRef=useRef(null);useEffect(()=>{if(!canvasRef.current||!containerRef.current||!data.length)return;const canvas=canvasRef.current,container=containerRef.current,ctx=canvas.getContext("2d"),dpr=window.devicePixelRatio||1,width=container.offsetWidth,height=container.offsetHeight;canvas.width=width*dpr;canvas.height=height*dpr;canvas.style.width=width+'px';canvas.style.height=height+'px';ctx.scale(dpr,dpr);const pad={top:20,right:20,bottom:35,left:50},cw=width-pad.left-pad.right,ch=height-pad.top-pad.bottom;ctx.fillStyle="rgba(10,1,24,0.15)";ctx.fillRect(0,0,width,height);const values=data.map((p,i)=>({value:p[paramName],timestamp:p.timestamp,i})).filter(p=>p.value!==undefined);if(values.length<2){ctx.fillStyle="rgba(184,180,212,0.5)";ctx.font="14px sans-serif";ctx.textAlign="center";ctx.fillText("Nepakanka duomenų",width/2,height/2);return;}const minVal=paramConfig.min,maxVal=paramConfig.max,range=maxVal-minVal||1;if(paramConfig.thresholds&&!paramConfig.inverted){const{thresholds}=paramConfig,normalY=pad.top+ch-((thresholds.normal.max-minVal)/range)*ch;ctx.fillStyle="rgba(34,197,94,0.06)";ctx.fillRect(pad.left,normalY,cw,pad.top+ch-normalY);if(thresholds.warning){const warnY=pad.top+ch-((thresholds.warning.max-minVal)/range)*ch;ctx.fillStyle="rgba(245,158,11,0.1)";ctx.fillRect(pad.left,warnY,cw,normalY-warnY);ctx.strokeStyle="rgba(245,158,11,0.4)";ctx.lineWidth=1;ctx.setLineDash([6,4]);ctx.beginPath();ctx.moveTo(pad.left,normalY);ctx.lineTo(width-pad.right,normalY);ctx.stroke();ctx.setLineDash([]);}if(thresholds.critical){const critY=thresholds.warning?pad.top+ch-((thresholds.warning.max-minVal)/range)*ch:normalY;ctx.fillStyle="rgba(239,68,68,0.1)";ctx.fillRect(pad.left,pad.top,cw,critY-pad.top);ctx.strokeStyle="rgba(239,68,68,0.5)";ctx.lineWidth=1.5;ctx.setLineDash([6,4]);ctx.beginPath();ctx.moveTo(pad.left,critY);ctx.lineTo(width-pad.right,critY);ctx.stroke();ctx.setLineDash([]);}}ctx.strokeStyle="rgba(102,126,234,0.08)";ctx.lineWidth=1;for(let i=0;i<=5;i++){const y=pad.top+(ch/5)*i;ctx.beginPath();ctx.moveTo(pad.left,y);ctx.lineTo(width-pad.right,y);ctx.stroke();ctx.fillStyle="rgba(184,180,212,0.6)";ctx.font="11px monospace";ctx.textAlign="right";ctx.fillText((maxVal-(range/5)*i).toFixed(0),pad.left-8,y+4);}ctx.beginPath();ctx.strokeStyle=paramConfig.color;ctx.lineWidth=2.5;ctx.lineCap="round";ctx.lineJoin="round";values.forEach((p,i)=>{const x=pad.left+(i/(values.length-1))*cw,y=pad.top+ch-((p.value-minVal)/range)*ch;i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);});ctx.stroke();const grad=ctx.createLinearGradient(0,pad.top,0,pad.top+ch);grad.addColorStop(0,paramConfig.color+"25");grad.addColorStop(1,paramConfig.color+"00");ctx.lineTo(pad.left+cw,pad.top+ch);ctx.lineTo(pad.left,pad.top+ch);ctx.closePath();ctx.fillStyle=grad;ctx.fill();values.forEach((p,i)=>{const status=getValueStatus(p.value,paramConfig);if(status==='warning'||status==='critical'){const x=pad.left+(i/(values.length-1))*cw,y=pad.top+ch-((p.value-minVal)/range)*ch;ctx.beginPath();ctx.arc(x,y,4,0,Math.PI*2);ctx.fillStyle=status==='critical'?'#ef4444':'#f59e0b';ctx.fill();}});const last=values[values.length-1],lx=pad.left+cw,ly=pad.top+ch-((last.value-minVal)/range)*ch;ctx.beginPath();ctx.arc(lx,ly,7,0,Math.PI*2);ctx.fillStyle=paramConfig.color;ctx.fill();ctx.beginPath();ctx.arc(lx,ly,3,0,Math.PI*2);ctx.fillStyle='#fff';ctx.fill();ctx.fillStyle="rgba(184,180,212,0.6)";ctx.font="10px sans-serif";ctx.textAlign="center";ctx.fillText(values[0].timestamp.toLocaleTimeString("lt-LT",{hour:"2-digit",minute:"2-digit"}),pad.left,height-10);ctx.fillText(values[values.length-1].timestamp.toLocaleTimeString("lt-LT",{hour:"2-digit",minute:"2-digit"}),width-pad.right,height-10);if(values.length>2)ctx.fillText(values[Math.floor(values.length/2)].timestamp.toLocaleTimeString("lt-LT",{hour:"2-digit",minute:"2-digit"}),pad.left+cw/2,height-10);},[data,paramName,paramConfig]);return<div ref={containerRef} className="obd-chart-canvas-container"><canvas ref={canvasRef}/></div>;}
