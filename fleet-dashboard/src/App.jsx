@@ -1,3 +1,8 @@
+// =============================================
+// APP.JSX - Updated with Alerts Route
+// Fleet Tracking Dashboard
+// =============================================
+
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import LandingPage from "./pages/LandingPage";
@@ -8,6 +13,7 @@ import TripsHistoryPage from "./pages/TripsHistoryPage";
 import OBDDashboardPage from "./pages/OBDDashboardPage";
 import ProfilePage from "./pages/ProfilePage";
 import SettingsPage from "./pages/SettingsPage";
+import AlertsPage from "./pages/AlertsPage"; // NEW
 
 function ProtectedRoute({ children }) {
     const { isAuthenticated, loading } = useAuth();
@@ -41,6 +47,9 @@ function App() {
                     
                     {/* Trips */}
                     <Route path="/trips" element={<ProtectedRoute><TripsHistoryPage /></ProtectedRoute>} />
+                    
+                    {/* Alerts - NEW */}
+                    <Route path="/alerts" element={<ProtectedRoute><AlertsPage /></ProtectedRoute>} />
                     
                     {/* User */}
                     <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
