@@ -173,7 +173,9 @@ def parse_avl(buf, offset):
     offset += 8
 
     ts_sec = ts / 1000
-    if ts_sec < 946684800 or ts_sec > 4102444800:
+    timestamp = datetime.utcfromtimestamp(ts_sec)
+    
+    if timestamp.year < 2020 or timestamp.year > 2030:
         return None, offset
 
     timestamp = datetime.utcfromtimestamp(ts_sec)
