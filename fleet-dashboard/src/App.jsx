@@ -1,5 +1,5 @@
 // =============================================
-// APP.JSX - Updated with Alerts Route
+// APP.JSX - Updated Routes
 // Fleet Tracking Dashboard
 // =============================================
 
@@ -10,10 +10,10 @@ import DashboardPage from "./pages/Dashboard";
 import VehiclesPage from "./pages/VehiclesPage";
 import VehicleDetailsPage from "./pages/VehicleDetailsPage";
 import TripsHistoryPage from "./pages/TripsHistoryPage";
-import OBDDashboardPage from "./pages/OBDDashboardPage";
+import OBDPage from "./pages/OBDPage";
 import ProfilePage from "./pages/ProfilePage";
 import SettingsPage from "./pages/SettingsPage";
-import AlertsPage from "./pages/AlertsPage"; // NEW
+import AlertsPage from "./pages/AlertsPage";
 
 function ProtectedRoute({ children }) {
     const { isAuthenticated, loading } = useAuth();
@@ -43,12 +43,14 @@ function App() {
                     {/* Vehicles */}
                     <Route path="/vehicles" element={<ProtectedRoute><VehiclesPage /></ProtectedRoute>} />
                     <Route path="/vehicles/:id" element={<ProtectedRoute><VehicleDetailsPage /></ProtectedRoute>} />
-                    <Route path="/vehicles/:id/obd" element={<ProtectedRoute><OBDDashboardPage /></ProtectedRoute>} />
                     
                     {/* Trips */}
                     <Route path="/trips" element={<ProtectedRoute><TripsHistoryPage /></ProtectedRoute>} />
                     
-                    {/* Alerts - NEW */}
+                    {/* OBD Diagnostics */}
+                    <Route path="/obd" element={<ProtectedRoute><OBDPage /></ProtectedRoute>} />
+                    
+                    {/* Alerts */}
                     <Route path="/alerts" element={<ProtectedRoute><AlertsPage /></ProtectedRoute>} />
                     
                     {/* User */}
