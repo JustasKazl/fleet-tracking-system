@@ -46,12 +46,19 @@ function getValueStatus(value, paramConfig) {
     if (!paramConfig?.thresholds) return 'normal';
     const { thresholds, inverted } = paramConfig;
     if (inverted) {
+        // For inverted (fuel, battery): lower is worse
         if (value < (thresholds.critical?.min ?? -Infinity)) return 'critical';
         if (value < (thresholds.warning?.min ?? -Infinity)) return 'warning';
+        if (value < (thresholds.normal?.min ?? -Infinity)) return 'warning';
         return 'normal';
     } else {
+        // For normal params: higher is worse
+        // Check if above critical threshold
         if (value >= (thresholds.critical?.max ?? Infinity)) return 'critical';
-        if (value >= (thresholds.warning?.max ?? Infinity)) return 'warning';
+        // Check if above warning threshold (which is same as normal.max)
+        if (value >= (thresholds.warning?.max ?? Infinity)) return 'critical';
+        // Check if above normal threshold - this means we're in warning zone
+        if (value > (thresholds.normal?.max ?? Infinity)) return 'warning';
         return 'normal';
     }
 }
@@ -144,14 +151,24 @@ function OBDPage() {
                 if (!param?.thresholds) return;
                 
                 const status = getValueStatus(value, param);
+                
+                // Track worst status: critical > warning > normal
                 if (status === 'critical') {
                     alerts[paramName] = 'critical';
-                } else if (status === 'warning' && alerts[paramName] !== 'critical') {
-                    alerts[paramName] = 'warning';
-                } else if (status === 'normal' && !alerts[paramName]) {
-                    alerts[paramName] = 'normal';
+                } else if (status === 'warning') {
+                    if (alerts[paramName] !== 'critical') {
+                        alerts[paramName] = 'warning';
+                    }
                 }
+                // Don't set normal - we only care if there were any warnings/criticals
             });
+        });
+        
+        // Set normal for params that had no warnings/criticals
+        availableParams.forEach(paramName => {
+            if (!alerts[paramName]) {
+                alerts[paramName] = 'normal';
+            }
         });
         
         setParamAlerts(alerts);
