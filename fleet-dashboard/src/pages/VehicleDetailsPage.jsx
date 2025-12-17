@@ -23,7 +23,7 @@ function VehicleDetailsPage() {
     const [serviceRecords, setServiceRecords] = useState([]);
 
     const [showServiceModal, setShowServiceModal] = useState(false);
-    const [showDocumentUploadModal, setShowDocumentUploadModal] = useState(null); // { type: "Draudimas" } or null
+    const [showDocumentUploadModal, setShowDocumentUploadModal] = useState(null);
     const [showOtherDocumentModal, setShowOtherDocumentModal] = useState(false);
     const [confirmDelete, setConfirmDelete] = useState(null);
 
@@ -218,16 +218,6 @@ function VehicleDetailsPage() {
                         vehicleImei={vehicle.imei || vehicle.fmb_serial}
                         token={token}
                     />
-                </div>
-
-                {/* Quick Actions */}
-                <div className="vehicle-actions">
-                    <button className="action-btn" onClick={() => navigate(`/vehicles/${id}/obd`)}>
-                        🔧 OBD-II Diagnostika
-                    </button>
-                    <button className="action-btn" onClick={() => navigate(`/trips`)}>
-                        📍 Kelionės
-                    </button>
                 </div>
                 
                 {/* KEY DOCUMENTS SECTION */}
