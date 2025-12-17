@@ -319,39 +319,39 @@ function FuelGauge({ value, optimal = 8, max = 20 }) {
         const canvas = canvasRef.current;
         const ctx = canvas.getContext('2d');
         const dpr = window.devicePixelRatio || 1;
-        const size = 180;
+        const size = 200;
         
         canvas.width = size * dpr;
-        canvas.height = (size * 0.65) * dpr;
+        canvas.height = (size * 0.7) * dpr;
         canvas.style.width = size + 'px';
-        canvas.style.height = (size * 0.65) + 'px';
+        canvas.style.height = (size * 0.7) + 'px';
         ctx.scale(dpr, dpr);
         
         const cx = size / 2;
-        const cy = size * 0.55;
-        const radius = size * 0.4;
+        const cy = size * 0.52;
+        const radius = size * 0.38;
         const startAngle = Math.PI;
         const endAngle = 2 * Math.PI;
         
         // Background arc
         ctx.beginPath();
         ctx.arc(cx, cy, radius, startAngle, endAngle);
-        ctx.lineWidth = 16;
+        ctx.lineWidth = 18;
         ctx.strokeStyle = 'rgba(255,255,255,0.1)';
         ctx.lineCap = 'round';
         ctx.stroke();
         
         // Colored segments
         const segments = [
-            { start: 0, end: 0.4, color: '#22c55e' },      // Good (0-8 L/100)
-            { start: 0.4, end: 0.6, color: '#f59e0b' },    // Average (8-12 L/100)
-            { start: 0.6, end: 1, color: '#ef4444' }       // Poor (12-20 L/100)
+            { start: 0, end: 0.4, color: '#22c55e' },
+            { start: 0.4, end: 0.6, color: '#f59e0b' },
+            { start: 0.6, end: 1, color: '#ef4444' }
         ];
         
         segments.forEach(seg => {
             ctx.beginPath();
             ctx.arc(cx, cy, radius, startAngle + seg.start * Math.PI, startAngle + seg.end * Math.PI);
-            ctx.lineWidth = 16;
+            ctx.lineWidth = 18;
             ctx.strokeStyle = seg.color + '40';
             ctx.lineCap = 'butt';
             ctx.stroke();
@@ -365,14 +365,14 @@ function FuelGauge({ value, optimal = 8, max = 20 }) {
             
             ctx.beginPath();
             ctx.arc(cx, cy, radius, startAngle, valueAngle);
-            ctx.lineWidth = 16;
+            ctx.lineWidth = 18;
             ctx.strokeStyle = valueColor;
             ctx.lineCap = 'round';
             ctx.stroke();
             
             // Needle
             const needleAngle = valueAngle - Math.PI / 2;
-            const needleLength = radius - 25;
+            const needleLength = radius - 30;
             ctx.beginPath();
             ctx.moveTo(cx, cy);
             ctx.lineTo(cx + Math.cos(needleAngle + Math.PI/2) * needleLength, cy + Math.sin(needleAngle + Math.PI/2) * needleLength);
@@ -392,22 +392,23 @@ function FuelGauge({ value, optimal = 8, max = 20 }) {
             ctx.fill();
         }
         
-        // Labels
+        // Labels on edges
         ctx.fillStyle = 'rgba(184,180,212,0.7)';
-        ctx.font = '10px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('0', cx - radius - 5, cy + 15);
-        ctx.fillText(max.toString(), cx + radius + 5, cy + 15);
-        ctx.fillText(optimal.toString(), cx - radius * 0.7, cy - radius * 0.5);
+        ctx.font = '11px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText('0', 15, cy + 5);
+        ctx.textAlign = 'right';
+        ctx.fillText(max.toString(), size - 15, cy + 5);
         
-        // Value text
+        // Value text below gauge
         if (value !== null && value !== undefined) {
             ctx.fillStyle = '#fff';
-            ctx.font = 'bold 24px Monaco, monospace';
-            ctx.fillText(value.toFixed(1), cx, cy + 5);
-            ctx.font = '11px sans-serif';
+            ctx.font = 'bold 28px Monaco, monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText(value.toFixed(1), cx, cy + 45);
+            ctx.font = '12px sans-serif';
             ctx.fillStyle = 'rgba(184,180,212,0.8)';
-            ctx.fillText('L/100km', cx, cy + 20);
+            ctx.fillText('L/100km', cx, cy + 62);
         }
     }, [value, optimal, max]);
     
