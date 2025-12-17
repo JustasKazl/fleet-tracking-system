@@ -249,10 +249,32 @@ function OBDPage() {
     }
 
     function calcFuel(data) {
-        const rates = data.map(p => p.fuel_rate).filter(v => v > 0), levels = data.map(p => p.fuel_level).filter(v => v !== undefined);
+        // Get fuel rate readings (instantaneous L/100km from OBD)
+        const rates = data.map(p => p.fuel_rate).filter(v => v !== undefined && v > 0);
+        
+        // Get fuel level readings
+        const levels = data.map(p => p.fuel_level).filter(v => v !== undefined);
+        
         if (!rates.length && !levels.length) return null;
-        const avg = rates.length ? rates.reduce((a,b)=>a+b,0)/rates.length : null;
-        return { avg, min: rates.length ? Math.min(...rates) : null, max: rates.length ? Math.max(...rates) : null, used: levels.length >= 2 ? Math.max(0, levels[0]-levels[levels.length-1]) : null, rating: avg === null ? 'average' : avg > 15 ? 'poor' : avg > 10 ? 'average' : 'good' };
+        
+        // Calculate average from OBD fuel rate sensor
+        const avg = rates.length ? rates.reduce((a, b) => a + b, 0) / rates.length : null;
+        const min = rates.length ? Math.min(...rates) : null;
+        const max = rates.length ? Math.max(...rates) : null;
+        
+        // Fuel used (percentage)
+        const fuelUsedPercent = levels.length >= 2 ? Math.max(0, levels[0] - levels[levels.length - 1]) : null;
+        
+        // Rating based on average
+        let rating = 'average';
+        if (avg !== null) {
+            if (avg < 7) rating = 'excellent';
+            else if (avg < 10) rating = 'good';
+            else if (avg < 15) rating = 'average';
+            else rating = 'poor';
+        }
+        
+        return { avg, min, max, fuelUsedPercent, rating };
     }
 
     // Calculate distance using Haversine formula
@@ -263,49 +285,63 @@ function OBDPage() {
         let movingTime = 0;
         let idleTime = 0;
         let maxSpeed = 0;
-        let totalFuelUsed = 0;
+        
+        // Track trip segments (break at >1 hour gaps)
+        const TRIP_GAP_MS = 60 * 60 * 1000;
         
         for (let i = 1; i < data.length; i++) {
             const prev = data[i-1], curr = data[i];
+            const timeDiff = curr.timestamp - prev.timestamp;
+            
+            // Skip if different trip
+            if (timeDiff > TRIP_GAP_MS) continue;
             
             // Distance calculation from GPS (if lat/lng available) or speed*time
             if (prev.latitude && prev.longitude && curr.latitude && curr.longitude) {
-                totalDistance += haversine(prev.latitude, prev.longitude, curr.latitude, curr.longitude);
+                const dist = haversine(prev.latitude, prev.longitude, curr.latitude, curr.longitude);
+                // Sanity check - skip if impossible jump (>10km in one interval)
+                if (dist < 10) {
+                    totalDistance += dist;
+                }
             } else if (curr.speed_kmh !== undefined && curr.speed_kmh > 0) {
-                // Estimate from speed (assuming ~30 sec between points)
-                const timeDiff = (curr.timestamp - prev.timestamp) / 1000 / 3600; // hours
-                totalDistance += curr.speed_kmh * timeDiff;
+                // Estimate from speed
+                const timeDiffHours = timeDiff / 1000 / 3600;
+                totalDistance += curr.speed_kmh * timeDiffHours;
             }
             
             // Time tracking
-            const timeDiffMin = (curr.timestamp - prev.timestamp) / 1000 / 60;
-            if (curr.speed_kmh > 5) {
-                movingTime += timeDiffMin;
-            } else {
-                idleTime += timeDiffMin;
+            const timeDiffMin = timeDiff / 1000 / 60;
+            if (timeDiffMin < 60) { // Only count reasonable intervals
+                if (curr.speed_kmh > 5) {
+                    movingTime += timeDiffMin;
+                } else {
+                    idleTime += timeDiffMin;
+                }
             }
             
             // Max speed
             if (curr.speed_kmh > maxSpeed) maxSpeed = curr.speed_kmh;
         }
         
-        // Fuel used from level change
+        // Fuel stats from level changes
         const levels = data.map(p => p.fuel_level).filter(v => v !== undefined);
-        if (levels.length >= 2) {
-            totalFuelUsed = Math.max(0, levels[0] - levels[levels.length - 1]);
-        }
+        const fuelUsedPercent = levels.length >= 2 ? Math.max(0, levels[0] - levels[levels.length - 1]) : 0;
         
-        // Calculate actual L/100km
-        const actualConsumption = totalDistance > 1 && totalFuelUsed > 0 
-            ? (totalFuelUsed / 100) * (50 / totalDistance) * 100 // Assuming 50L tank
-            : null;
+        // Calculate actual consumption: L/100km from fuel level % and distance
+        // Assuming typical 50L tank, but show only if we have meaningful data
+        let actualConsumption = null;
+        if (totalDistance > 5 && fuelUsedPercent > 1) {
+            // fuelUsedPercent% of 50L tank / distance in km * 100
+            const litersUsed = (fuelUsedPercent / 100) * 50;
+            actualConsumption = (litersUsed / totalDistance) * 100;
+        }
         
         return {
             distance: totalDistance,
             movingTime: Math.round(movingTime),
             idleTime: Math.round(idleTime),
             maxSpeed: Math.round(maxSpeed),
-            fuelUsedPercent: totalFuelUsed,
+            fuelUsedPercent,
             actualConsumption
         };
     }
@@ -544,26 +580,29 @@ function OBDPage() {
                             <div className="fuel-gauge-container">
                                 <FuelGauge value={fuelEfficiency?.avg} optimal={8} max={20} />
                             </div>
-                            <div className="fuel-comparison">
-                                <div className="fuel-comp-item">
-                                    <span className="comp-label">OBD vidurkis</span>
-                                    <span className="comp-value">{fuelEfficiency?.avg?.toFixed(1) || '-'}</span>
-                                    <span className="comp-unit">L/100km</span>
+                            <div className="fuel-avg-stats">
+                                <div className="fuel-avg-main">
+                                    <span className="fuel-avg-value">{fuelEfficiency?.avg?.toFixed(1) || '-'}</span>
+                                    <span className="fuel-avg-unit">L/100km vid.</span>
                                 </div>
-                                <div className="fuel-comp-divider">vs</div>
-                                <div className="fuel-comp-item">
-                                    <span className="comp-label">Pagal nuvažiuota</span>
-                                    <span className="comp-value actual">{tripStats?.actualConsumption?.toFixed(1) || '-'}</span>
-                                    <span className="comp-unit">L/100km</span>
+                                <div className="fuel-avg-range">
+                                    <span>Min: {fuelEfficiency?.min?.toFixed(1) || '-'}</span>
+                                    <span>Max: {fuelEfficiency?.max?.toFixed(1) || '-'}</span>
                                 </div>
                             </div>
                             <div className="fuel-stats">
-                                <div className="fuel-stat"><span>📏 Atstumas</span><span>{tripStats?.distance?.toFixed(1) || '-'} km</span></div>
-                                <div className="fuel-stat"><span>⛽ Sunaudota</span><span>{tripStats?.fuelUsedPercent?.toFixed(0) || '-'}%</span></div>
-                                <div className="fuel-stat"><span>🚗 Judėjimas</span><span>{tripStats?.movingTime || '-'} min</span></div>
+                                <div className="fuel-stat"><span>📏 Nuvažiuota</span><span>{tripStats?.distance?.toFixed(1) || '-'} km</span></div>
+                                <div className="fuel-stat"><span>⛽ Kuro sunaudota</span><span>{tripStats?.fuelUsedPercent?.toFixed(0) || '-'}%</span></div>
+                                <div className="fuel-stat"><span>🚗 Judėjimo laikas</span><span>{tripStats?.movingTime || '-'} min</span></div>
                                 <div className="fuel-stat"><span>⏸️ Tuščia eiga</span><span>{tripStats?.idleTime || '-'} min</span></div>
                                 <div className="fuel-stat"><span>🏎️ Max greitis</span><span>{tripStats?.maxSpeed || '-'} km/h</span></div>
                             </div>
+                            {tripStats?.actualConsumption && (
+                                <div className="fuel-calculated">
+                                    <span className="fuel-calc-label">Apskaičiuota pagal kuro lygį:</span>
+                                    <span className="fuel-calc-value">{tripStats.actualConsumption.toFixed(1)} L/100km</span>
+                                </div>
+                            )}
                         </div>
                     </div>
 
