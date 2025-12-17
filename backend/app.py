@@ -49,7 +49,7 @@ CORS(app,
     resources={
         r"/api/*": {
             "origins": FRONTEND_URLS,
-            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+            "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
             "allow_headers": ["Content-Type", "Authorization", "Accept"],
             "expose_headers": ["Content-Type", "Authorization"],
             "supports_credentials": True,
@@ -66,7 +66,7 @@ def handle_preflight():
         response = jsonify({"status": "ok"})
         response.headers.add("Access-Control-Allow-Origin", request.headers.get("Origin", "*"))
         response.headers.add("Access-Control-Allow-Headers", "Content-Type,Authorization")
-        response.headers.add("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS")
+        response.headers.add("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS")
         response.headers.add("Access-Control-Max-Age", "7200")
         return response, 200
 
@@ -158,8 +158,37 @@ def init_db():
         );
         """)
 
+        # ══════════════════════════════════════════════════════════
+        # ALERTS TABLE
+        # ══════════════════════════════════════════════════════════
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS alerts (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            vehicle_id INTEGER REFERENCES vehicles(id) ON DELETE CASCADE,
+            alert_type VARCHAR(50) NOT NULL,
+            severity VARCHAR(20) NOT NULL DEFAULT 'warning',
+            title VARCHAR(255) NOT NULL,
+            message TEXT,
+            metadata JSONB DEFAULT '{}',
+            status VARCHAR(20) NOT NULL DEFAULT 'active',
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+            acknowledged_at TIMESTAMP WITH TIME ZONE,
+            resolved_at TIMESTAMP WITH TIME ZONE,
+            acknowledged_by INTEGER REFERENCES users(id),
+            resolved_by INTEGER REFERENCES users(id)
+        );
+        """)
+
+        # Alerts indexes for performance
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_alerts_user_id ON alerts(user_id);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_alerts_vehicle_id ON alerts(vehicle_id);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_alerts_status ON alerts(status);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_alerts_severity ON alerts(severity);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_alerts_created_at ON alerts(created_at DESC);")
+
         conn.commit()
-        print("✅ All tables created successfully")
+        print("✅ All tables created successfully (including alerts)")
 
     except Exception as e:
         print(f"⚠️ Error during table creation: {e}")
@@ -1116,6 +1145,389 @@ def api_delete_service(user_id, record_id):
         conn.close()
         return jsonify({"error": "Failed to delete service record"}), 500
 
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ALERTS API ROUTES
+# ══════════════════════════════════════════════════════════════════════════════
+
+# Valid alert types (including OBD diagnostics)
+VALID_ALERT_TYPES = [
+    'speed', 'geofence', 'maintenance', 'document', 'offline', 'fuel', 'battery', 'custom',
+    # OBD-II diagnostic types
+    'obd_rpm', 'obd_coolant_temp', 'obd_speed_kmh', 'obd_engine_load',
+    'obd_intake_air_temp', 'obd_maf', 'obd_throttle', 'obd_fuel_level',
+    'obd_battery_voltage', 'obd_fuel_rate'
+]
+
+VALID_SEVERITIES = ['info', 'warning', 'critical']
+
+
+@app.route("/api/alerts", methods=["GET"])
+@require_auth
+def api_get_alerts(user_id):
+    """Get all alerts for user with optional filters"""
+    try:
+        conn = get_db()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        status = request.args.get('status')
+        severity = request.args.get('severity')
+        vehicle_id = request.args.get('vehicle_id')
+        limit = request.args.get('limit', default=50, type=int)
+        offset = request.args.get('offset', default=0, type=int)
+        
+        query = """
+            SELECT 
+                a.*,
+                v.brand as vehicle_brand,
+                v.model as vehicle_model,
+                v.plate as vehicle_plate,
+                v.custom_name as vehicle_name
+            FROM alerts a
+            LEFT JOIN vehicles v ON a.vehicle_id = v.id
+            WHERE a.user_id = %s
+        """
+        params = [user_id]
+        
+        if status:
+            query += " AND a.status = %s"
+            params.append(status)
+        
+        if severity:
+            query += " AND a.severity = %s"
+            params.append(severity)
+        
+        if vehicle_id:
+            query += " AND a.vehicle_id = %s"
+            params.append(vehicle_id)
+        
+        query += " ORDER BY a.created_at DESC LIMIT %s OFFSET %s"
+        params.extend([limit, offset])
+        
+        cur.execute(query, params)
+        alerts = cur.fetchall()
+        
+        # Get total count
+        count_query = "SELECT COUNT(*) as count FROM alerts WHERE user_id = %s"
+        count_params = [user_id]
+        if status:
+            count_query += " AND status = %s"
+            count_params.append(status)
+        if severity:
+            count_query += " AND severity = %s"
+            count_params.append(severity)
+        
+        cur.execute(count_query, count_params)
+        total = cur.fetchone()['count']
+        
+        cur.close()
+        conn.close()
+        
+        return jsonify({
+            "alerts": alerts,
+            "total": total,
+            "limit": limit,
+            "offset": offset
+        }), 200
+        
+    except Exception as e:
+        print(f"Error fetching alerts: {e}")
+        return jsonify({"error": "Nepavyko gauti įspėjimų"}), 500
+
+
+@app.route("/api/alerts/recent", methods=["GET"])
+@require_auth
+def api_get_recent_alerts(user_id):
+    """Get recent active alerts for dashboard"""
+    try:
+        conn = get_db()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        limit = request.args.get('limit', default=5, type=int)
+        
+        cur.execute("""
+            SELECT 
+                a.*,
+                v.brand as vehicle_brand,
+                v.model as vehicle_model,
+                v.plate as vehicle_plate,
+                v.custom_name as vehicle_name
+            FROM alerts a
+            LEFT JOIN vehicles v ON a.vehicle_id = v.id
+            WHERE a.user_id = %s AND a.status IN ('active', 'acknowledged')
+            ORDER BY 
+                CASE a.severity 
+                    WHEN 'critical' THEN 1 
+                    WHEN 'warning' THEN 2 
+                    ELSE 3 
+                END,
+                a.created_at DESC
+            LIMIT %s
+        """, (user_id, limit))
+        
+        alerts = cur.fetchall()
+        cur.close()
+        conn.close()
+        
+        return jsonify(alerts), 200
+        
+    except Exception as e:
+        print(f"Error fetching recent alerts: {e}")
+        return jsonify({"error": "Nepavyko gauti įspėjimų"}), 500
+
+
+@app.route("/api/alerts/stats", methods=["GET"])
+@require_auth
+def api_get_alerts_stats(user_id):
+    """Get alert statistics"""
+    try:
+        conn = get_db()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        cur.execute("""
+            SELECT 
+                COUNT(*) FILTER (WHERE status = 'active') as active_count,
+                COUNT(*) FILTER (WHERE status = 'active' AND severity = 'critical') as critical_count,
+                COUNT(*) FILTER (WHERE status = 'active' AND severity = 'warning') as warning_count,
+                COUNT(*) FILTER (WHERE status = 'active' AND severity = 'info') as info_count,
+                COUNT(*) FILTER (WHERE status = 'acknowledged') as acknowledged_count,
+                COUNT(*) FILTER (WHERE status = 'resolved' AND resolved_at > NOW() - INTERVAL '24 hours') as resolved_today,
+                COUNT(*) as total_count
+            FROM alerts
+            WHERE user_id = %s
+        """, (user_id,))
+        
+        stats = cur.fetchone()
+        cur.close()
+        conn.close()
+        
+        return jsonify(stats), 200
+        
+    except Exception as e:
+        print(f"Error fetching alert stats: {e}")
+        return jsonify({"error": "Nepavyko gauti statistikos"}), 500
+
+
+@app.route("/api/alerts/<int:alert_id>", methods=["GET"])
+@require_auth
+def api_get_alert(user_id, alert_id):
+    """Get single alert by ID"""
+    try:
+        conn = get_db()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        cur.execute("""
+            SELECT 
+                a.*,
+                v.brand as vehicle_brand,
+                v.model as vehicle_model,
+                v.plate as vehicle_plate,
+                v.custom_name as vehicle_name
+            FROM alerts a
+            LEFT JOIN vehicles v ON a.vehicle_id = v.id
+            WHERE a.id = %s AND a.user_id = %s
+        """, (alert_id, user_id))
+        
+        alert = cur.fetchone()
+        cur.close()
+        conn.close()
+        
+        if not alert:
+            return jsonify({"error": "Įspėjimas nerastas"}), 404
+        
+        return jsonify(alert), 200
+        
+    except Exception as e:
+        print(f"Error fetching alert: {e}")
+        return jsonify({"error": "Nepavyko gauti įspėjimo"}), 500
+
+
+@app.route("/api/alerts", methods=["POST"])
+@require_auth
+def api_create_alert(user_id):
+    """Create new alert (used by OBD diagnostics)"""
+    try:
+        data = request.json
+        
+        alert_type = data.get('alert_type')
+        title = data.get('title')
+        severity = data.get('severity', 'warning')
+        vehicle_id = data.get('vehicle_id')
+        message = data.get('message')
+        metadata = data.get('metadata', {})
+        
+        # Validation
+        if not alert_type or not title:
+            return jsonify({"error": "Trūksta privalomų laukų (alert_type, title)"}), 400
+        
+        if alert_type not in VALID_ALERT_TYPES:
+            return jsonify({"error": f"Netinkamas įspėjimo tipas: {alert_type}"}), 400
+        
+        if severity not in VALID_SEVERITIES:
+            return jsonify({"error": f"Netinkamas svarbumo lygis: {severity}"}), 400
+        
+        conn = get_db()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # Verify vehicle belongs to user (if vehicle_id provided)
+        if vehicle_id:
+            cur.execute("SELECT id FROM vehicles WHERE id = %s AND user_id = %s", (vehicle_id, user_id))
+            if not cur.fetchone():
+                cur.close()
+                conn.close()
+                return jsonify({"error": "Automobilis nerastas"}), 404
+        
+        cur.execute("""
+            INSERT INTO alerts (user_id, vehicle_id, alert_type, severity, title, message, metadata)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            RETURNING *
+        """, (
+            user_id,
+            vehicle_id,
+            alert_type,
+            severity,
+            title,
+            message,
+            json.dumps(metadata) if metadata else '{}'
+        ))
+        
+        alert = cur.fetchone()
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        print(f"✅ Alert created: {alert_type} - {title} (severity: {severity})")
+        
+        return jsonify(alert), 201
+        
+    except Exception as e:
+        print(f"Error creating alert: {e}")
+        return jsonify({"error": "Nepavyko sukurti įspėjimo"}), 500
+
+
+@app.route("/api/alerts/<int:alert_id>/acknowledge", methods=["PATCH"])
+@require_auth
+def api_acknowledge_alert(user_id, alert_id):
+    """Acknowledge an alert"""
+    try:
+        conn = get_db()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        cur.execute("""
+            UPDATE alerts 
+            SET status = 'acknowledged', 
+                acknowledged_at = CURRENT_TIMESTAMP,
+                acknowledged_by = %s
+            WHERE id = %s AND user_id = %s AND status = 'active'
+            RETURNING *
+        """, (user_id, alert_id, user_id))
+        
+        alert = cur.fetchone()
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        if not alert:
+            return jsonify({"error": "Įspėjimas nerastas arba jau patvirtintas"}), 404
+        
+        return jsonify(alert), 200
+        
+    except Exception as e:
+        print(f"Error acknowledging alert: {e}")
+        return jsonify({"error": "Nepavyko patvirtinti įspėjimo"}), 500
+
+
+@app.route("/api/alerts/<int:alert_id>/resolve", methods=["PATCH"])
+@require_auth
+def api_resolve_alert(user_id, alert_id):
+    """Resolve an alert"""
+    try:
+        conn = get_db()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        cur.execute("""
+            UPDATE alerts 
+            SET status = 'resolved', 
+                resolved_at = CURRENT_TIMESTAMP,
+                resolved_by = %s
+            WHERE id = %s AND user_id = %s AND status IN ('active', 'acknowledged')
+            RETURNING *
+        """, (user_id, alert_id, user_id))
+        
+        alert = cur.fetchone()
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        if not alert:
+            return jsonify({"error": "Įspėjimas nerastas arba jau išspręstas"}), 404
+        
+        return jsonify(alert), 200
+        
+    except Exception as e:
+        print(f"Error resolving alert: {e}")
+        return jsonify({"error": "Nepavyko išspręsti įspėjimo"}), 500
+
+
+@app.route("/api/alerts/<int:alert_id>/dismiss", methods=["PATCH"])
+@require_auth
+def api_dismiss_alert(user_id, alert_id):
+    """Dismiss an alert"""
+    try:
+        conn = get_db()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        cur.execute("""
+            UPDATE alerts 
+            SET status = 'dismissed'
+            WHERE id = %s AND user_id = %s
+            RETURNING *
+        """, (alert_id, user_id))
+        
+        alert = cur.fetchone()
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        if not alert:
+            return jsonify({"error": "Įspėjimas nerastas"}), 404
+        
+        return jsonify(alert), 200
+        
+    except Exception as e:
+        print(f"Error dismissing alert: {e}")
+        return jsonify({"error": "Nepavyko atmesti įspėjimo"}), 500
+
+
+@app.route("/api/alerts/<int:alert_id>", methods=["DELETE"])
+@require_auth
+def api_delete_alert(user_id, alert_id):
+    """Delete an alert"""
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        
+        cur.execute("""
+            DELETE FROM alerts 
+            WHERE id = %s AND user_id = %s
+            RETURNING id
+        """, (alert_id, user_id))
+        
+        result = cur.fetchone()
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        if not result:
+            return jsonify({"error": "Įspėjimas nerastas"}), 404
+        
+        return jsonify({"ok": True, "id": alert_id}), 200
+        
+    except Exception as e:
+        print(f"Error deleting alert: {e}")
+        return jsonify({"error": "Nepavyko ištrinti įspėjimo"}), 500
+
+
 # =============== DEBUG ===============
 
 @app.route("/debug/columns")
@@ -1135,7 +1547,7 @@ def debug_columns():
 
 @app.route("/")
 def root():
-    return "Fleet backend running on PostgreSQL with Auth + Teltonika TCP (IMEI-ONLY)", 200
+    return "Fleet backend running on PostgreSQL with Auth + Teltonika TCP + Alerts API", 200
 
 # ══════════════════════════════════════════════════════════════════════════════
 # TRIP DETECTION & HISTORY (1-HOUR GAP BASED)
@@ -1380,7 +1792,7 @@ def api_get_vehicle_trips_summary(user_id, vehicle_id):
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("🚀 FLEETTRACK BACKEND STARTUP (IMEI-ONLY)")
+    print("🚀 FLEETTRACK BACKEND STARTUP (WITH ALERTS)")
     print("=" * 60)
     
     try:
