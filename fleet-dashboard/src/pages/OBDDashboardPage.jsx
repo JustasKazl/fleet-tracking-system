@@ -247,7 +247,7 @@ function OBDPage() {
                                         <div style={{ fontSize: '22px', marginBottom: '8px' }}>{param.icon}</div>
                                         <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '6px', lineHeight: 1.2 }}>{param.label}</div>
                                         <div style={{ fontSize: '26px', fontWeight: '700', color }}>
-                                            {stats.current.toFixed(paramName === 'battery_voltage' ? 1 : 0)}
+                                            {stats.avg.toFixed(paramName === 'battery_voltage' ? 1 : 0)}
                                             <span style={{ fontSize: '13px', fontWeight: '400', color: 'var(--text-muted)', marginLeft: '4px' }}>{param.unit}</span>
                                         </div>
                                     </div>
