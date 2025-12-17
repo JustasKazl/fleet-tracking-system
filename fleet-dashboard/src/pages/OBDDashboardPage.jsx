@@ -57,15 +57,102 @@ function OBDPage() {
 
     useEffect(() => { if (selectedVehicle?.imei && token) loadTelemetry(); }, [selectedVehicle, token, timeRange]);
 
-    function analyzeAlerts(data) {
+    // Track which alerts we've already created this session to avoid duplicates
+    const [createdAlerts, setCreatedAlerts] = useState(new Set());
+    const [existingAlerts, setExistingAlerts] = useState(new Set());
+
+    // Load existing active alerts for this vehicle on mount
+    useEffect(() => {
+        async function loadExistingAlerts() {
+            if (!selectedVehicle || !token) return;
+            try {
+                const res = await fetch(`${API_BASE_URL}/api/alerts?vehicle_id=${selectedVehicle.id}&status=active`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await res.json();
+                // Create set of existing alert types for this vehicle
+                const existing = new Set(data.alerts?.map(a => a.alert_type) || []);
+                setExistingAlerts(existing);
+            } catch (err) {
+                console.error('Failed to load existing alerts:', err);
+            }
+        }
+        loadExistingAlerts();
+    }, [selectedVehicle, token]);
+
+    async function analyzeAlerts(data) {
         const alerts = {};
+        const criticalEvents = {}; // Track critical events per parameter
+        
         data.forEach(pt => Object.keys(OBD_PARAMS).forEach(p => {
             const v = pt[p]; if (v === undefined) return;
             const s = getValueStatus(v, OBD_PARAMS[p]);
-            if (s === 'critical') alerts[p] = 'critical'; else if (s === 'warning' && alerts[p] !== 'critical') alerts[p] = 'warning';
+            if (s === 'critical') {
+                alerts[p] = 'critical';
+                if (!criticalEvents[p]) criticalEvents[p] = { count: 0, maxValue: v, param: OBD_PARAMS[p] };
+                criticalEvents[p].count++;
+                if (OBD_PARAMS[p].inverted) {
+                    if (v < criticalEvents[p].maxValue) criticalEvents[p].maxValue = v;
+                } else {
+                    if (v > criticalEvents[p].maxValue) criticalEvents[p].maxValue = v;
+                }
+            } else if (s === 'warning' && alerts[p] !== 'critical') {
+                alerts[p] = 'warning';
+            }
         }));
+        
         Object.keys(OBD_PARAMS).forEach(p => { if (!alerts[p]) alerts[p] = 'normal'; });
         setParamAlerts(alerts);
+        
+        // Create alerts in database for critical issues
+        if (selectedVehicle && token) {
+            for (const [param, eventData] of Object.entries(criticalEvents)) {
+                const alertType = `obd_${param}`;
+                
+                // Skip if alert already exists in database (active)
+                if (existingAlerts.has(alertType)) continue;
+                
+                // Skip if we already created this alert this session
+                if (createdAlerts.has(alertType)) continue;
+                
+                // Only create alert if critical happened more than 5 times (not just a spike)
+                if (eventData.count < 5) continue;
+                
+                const pm = eventData.param;
+                const pct = ((eventData.count / data.length) * 100).toFixed(1);
+                
+                try {
+                    await fetch(`${API_BASE_URL}/api/alerts`, {
+                        method: 'POST',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}` 
+                        },
+                        body: JSON.stringify({
+                            vehicle_id: selectedVehicle.id,
+                            alert_type: alertType,
+                            severity: 'critical',
+                            title: pm.alertMessage || `${pm.label} kritinis lygis`,
+                            message: `${pm.label}: max ${eventData.maxValue.toFixed(1)}${pm.unit}, kritinis ${pct}% laiko (${eventData.count} kartų)`,
+                            metadata: {
+                                param,
+                                maxValue: eventData.maxValue,
+                                criticalCount: eventData.count,
+                                criticalPercent: parseFloat(pct),
+                                timeRange
+                            }
+                        })
+                    });
+                    
+                    // Mark as created (both in session and existing)
+                    setCreatedAlerts(prev => new Set([...prev, alertType]));
+                    setExistingAlerts(prev => new Set([...prev, alertType]));
+                    console.log(`✅ Alert created: ${pm.label}`);
+                } catch (err) {
+                    console.error('Failed to create alert:', err);
+                }
+            }
+        }
     }
 
     function calcHealth(data) {
