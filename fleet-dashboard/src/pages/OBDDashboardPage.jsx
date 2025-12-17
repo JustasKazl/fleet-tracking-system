@@ -1,5 +1,5 @@
 // =============================================
-// OBD PAGE - 2 Column Cards + Matching Chart Height
+// OBD PAGE - Full Width Layout
 // Fleet Tracking Dashboard
 // =============================================
 
@@ -177,7 +177,7 @@ function OBDPage() {
 
     return (
         <DashboardLayout>
-            <div style={{ padding: '20px', maxWidth: '1800px', margin: '0 auto' }}>
+            <div style={{ padding: '20px' }}>
                 {/* Header */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
                     <div>
@@ -218,9 +218,9 @@ function OBDPage() {
                         <p style={{ margin: 0 }}>Patikrinkite, ar FMB įrenginys prijungtas prie OBD-II lizdo.</p>
                     </div>
                 ) : (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '20px', alignItems: 'start' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '380px 1fr', gap: '20px', alignItems: 'start' }}>
                         {/* Left - Cards Grid (2 columns) */}
-                        <div ref={cardsRef} style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 160px)', gap: '10px' }}>
+                        <div ref={cardsRef} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                             {availableParams.map(paramName => {
                                 const param = OBD_PARAMS[paramName];
                                 const stats = getStats(paramName);
@@ -232,7 +232,7 @@ function OBDPage() {
                                         key={paramName}
                                         onClick={() => setSelectedParam(paramName)}
                                         style={{
-                                            padding: '14px',
+                                            padding: '16px',
                                             background: isSelected ? 'rgba(102,126,234,0.15)' : 'rgba(26,15,46,0.5)',
                                             border: `2px solid ${isSelected ? 'var(--accent)' : stats.status !== 'normal' ? color : 'var(--border-color)'}`,
                                             borderRadius: '12px',
@@ -242,13 +242,13 @@ function OBDPage() {
                                         }}
                                     >
                                         {stats.status !== 'normal' && (
-                                            <div style={{ position: 'absolute', top: '8px', right: '8px', width: '8px', height: '8px', borderRadius: '50%', background: color, animation: stats.status === 'critical' ? 'pulse 1s infinite' : 'none' }} />
+                                            <div style={{ position: 'absolute', top: '10px', right: '10px', width: '8px', height: '8px', borderRadius: '50%', background: color, animation: stats.status === 'critical' ? 'pulse 1s infinite' : 'none' }} />
                                         )}
-                                        <div style={{ fontSize: '20px', marginBottom: '6px' }}>{param.icon}</div>
-                                        <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px', lineHeight: 1.2 }}>{param.label}</div>
-                                        <div style={{ fontSize: '22px', fontWeight: '700', color }}>
+                                        <div style={{ fontSize: '22px', marginBottom: '8px' }}>{param.icon}</div>
+                                        <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '6px', lineHeight: 1.2 }}>{param.label}</div>
+                                        <div style={{ fontSize: '26px', fontWeight: '700', color }}>
                                             {stats.current.toFixed(paramName === 'battery_voltage' ? 1 : 0)}
-                                            <span style={{ fontSize: '11px', fontWeight: '400', color: 'var(--text-muted)', marginLeft: '3px' }}>{param.unit}</span>
+                                            <span style={{ fontSize: '13px', fontWeight: '400', color: 'var(--text-muted)', marginLeft: '4px' }}>{param.unit}</span>
                                         </div>
                                     </div>
                                 );
@@ -261,8 +261,7 @@ function OBDPage() {
                             border: '1px solid var(--border-color)',
                             borderRadius: '16px',
                             padding: '20px',
-                            height: `${cardsHeight}px`,
-                            minHeight: '400px',
+                            height: `${Math.max(cardsHeight, 450)}px`,
                             display: 'flex',
                             flexDirection: 'column'
                         }}>
@@ -280,22 +279,22 @@ function OBDPage() {
                                                 {selStats.status === 'normal' ? '✓ OK' : selStats.status === 'warning' ? '⚠ Įspėjimas' : '🚨 Kritinis'}
                                             </span>
                                         </div>
-                                        <div style={{ display: 'flex', gap: '20px', fontSize: '13px' }}>
+                                        <div style={{ display: 'flex', gap: '24px', fontSize: '13px' }}>
                                             <div style={{ textAlign: 'center' }}>
-                                                <div style={{ color: 'var(--text-muted)', fontSize: '10px', textTransform: 'uppercase' }}>Dabartinis</div>
-                                                <div style={{ fontWeight: '700', color: statusColors[selStats.status], fontSize: '16px' }}>{selStats.current.toFixed(1)}</div>
+                                                <div style={{ color: 'var(--text-muted)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Dabartinis</div>
+                                                <div style={{ fontWeight: '700', color: statusColors[selStats.status], fontSize: '18px' }}>{selStats.current.toFixed(1)}</div>
                                             </div>
                                             <div style={{ textAlign: 'center' }}>
-                                                <div style={{ color: 'var(--text-muted)', fontSize: '10px', textTransform: 'uppercase' }}>Min</div>
-                                                <div style={{ fontWeight: '600', color: 'var(--text-main)' }}>{selStats.min.toFixed(1)}</div>
+                                                <div style={{ color: 'var(--text-muted)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Min</div>
+                                                <div style={{ fontWeight: '600', color: 'var(--text-main)', fontSize: '16px' }}>{selStats.min.toFixed(1)}</div>
                                             </div>
                                             <div style={{ textAlign: 'center' }}>
-                                                <div style={{ color: 'var(--text-muted)', fontSize: '10px', textTransform: 'uppercase' }}>Vid</div>
-                                                <div style={{ fontWeight: '600', color: 'var(--text-main)' }}>{selStats.avg.toFixed(1)}</div>
+                                                <div style={{ color: 'var(--text-muted)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Vid</div>
+                                                <div style={{ fontWeight: '600', color: 'var(--text-main)', fontSize: '16px' }}>{selStats.avg.toFixed(1)}</div>
                                             </div>
                                             <div style={{ textAlign: 'center' }}>
-                                                <div style={{ color: 'var(--text-muted)', fontSize: '10px', textTransform: 'uppercase' }}>Max</div>
-                                                <div style={{ fontWeight: '600', color: 'var(--text-main)' }}>{selStats.max.toFixed(1)}</div>
+                                                <div style={{ color: 'var(--text-muted)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Max</div>
+                                                <div style={{ fontWeight: '600', color: 'var(--text-main)', fontSize: '16px' }}>{selStats.max.toFixed(1)}</div>
                                             </div>
                                         </div>
                                     </div>
@@ -306,10 +305,10 @@ function OBDPage() {
                                     </div>
 
                                     {/* Legend */}
-                                    <div style={{ display: 'flex', gap: '16px', justifyContent: 'center', marginTop: '12px', fontSize: '11px', color: 'var(--text-muted)' }}>
-                                        <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}><span style={{ width: '10px', height: '10px', background: '#22c55e', borderRadius: '2px' }} />Normalus</span>
-                                        <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}><span style={{ width: '10px', height: '10px', background: '#f59e0b', borderRadius: '2px' }} />Įspėjimas</span>
-                                        <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}><span style={{ width: '10px', height: '10px', background: '#ef4444', borderRadius: '2px' }} />Kritinis</span>
+                                    <div style={{ display: 'flex', gap: '20px', justifyContent: 'center', marginTop: '14px', fontSize: '12px', color: 'var(--text-muted)' }}>
+                                        <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><span style={{ width: '12px', height: '12px', background: '#22c55e', borderRadius: '3px' }} />Normalus</span>
+                                        <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><span style={{ width: '12px', height: '12px', background: '#f59e0b', borderRadius: '3px' }} />Įspėjimas</span>
+                                        <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><span style={{ width: '12px', height: '12px', background: '#ef4444', borderRadius: '3px' }} />Kritinis</span>
                                     </div>
                                 </>
                             ) : (
@@ -354,7 +353,7 @@ function OBDChart({ data, paramName, paramConfig }) {
         canvas.style.height = height + 'px';
         ctx.scale(dpr, dpr);
 
-        const pad = { top: 25, right: 25, bottom: 40, left: 55 };
+        const pad = { top: 20, right: 20, bottom: 35, left: 50 };
         const cw = width - pad.left - pad.right;
         const ch = height - pad.top - pad.bottom;
 
@@ -476,11 +475,11 @@ function OBDChart({ data, paramName, paramConfig }) {
         ctx.font = "10px sans-serif";
         ctx.textAlign = "center";
         const first = values[0].timestamp, lastT = values[values.length - 1].timestamp;
-        ctx.fillText(first.toLocaleTimeString("lt-LT", { hour: "2-digit", minute: "2-digit" }), pad.left, height - 12);
-        ctx.fillText(lastT.toLocaleTimeString("lt-LT", { hour: "2-digit", minute: "2-digit" }), width - pad.right, height - 12);
+        ctx.fillText(first.toLocaleTimeString("lt-LT", { hour: "2-digit", minute: "2-digit" }), pad.left, height - 10);
+        ctx.fillText(lastT.toLocaleTimeString("lt-LT", { hour: "2-digit", minute: "2-digit" }), width - pad.right, height - 10);
         if (values.length > 2) {
             const mid = values[Math.floor(values.length / 2)].timestamp;
-            ctx.fillText(mid.toLocaleTimeString("lt-LT", { hour: "2-digit", minute: "2-digit" }), pad.left + cw / 2, height - 12);
+            ctx.fillText(mid.toLocaleTimeString("lt-LT", { hour: "2-digit", minute: "2-digit" }), pad.left + cw / 2, height - 10);
         }
     }, [data, paramName, paramConfig]);
 
