@@ -1,6 +1,12 @@
+// =============================================
+// DASHBOARD PAGE - FULLY FUNCTIONAL
+// Fleet Tracking Dashboard
+// =============================================
+
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import DashboardLayout from "../layout/DashboardLayout";
+import DashboardMap from "../components/DashboardMap";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import API_BASE_URL from "../api";
@@ -331,59 +337,10 @@ function Dashboard() {
                                 {vehicles.length} automobilių pozicijos
                             </div>
                         </div>
-                        <button 
-                            className="chip" 
-                            onClick={() => vehicles.length > 0 && navigate(`/vehicles/${vehicles[0].id}`)}
-                        >
-                            Atidaryti
-                        </button>
                     </div>
 
-                    <div className="map-placeholder" style={{ position: 'relative' }}>
-                        {loading ? (
-                            <div className="spinner"></div>
-                        ) : vehicles.length === 0 ? (
-                            <div style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
-                                <div style={{ fontSize: '48px', marginBottom: '12px', opacity: 0.5 }}>🗺️</div>
-                                <div>Pridėkite automobilį, kad matytumėte žemėlapį</div>
-                            </div>
-                        ) : (
-                            <>
-                                <div style={{ 
-                                    fontSize: '48px', 
-                                    marginBottom: '12px',
-                                    animation: 'pulse 2s infinite'
-                                }}>
-                                    🗺️
-                                </div>
-                                <div style={{ color: 'var(--text-muted)', marginBottom: '16px' }}>
-                                    Pasirinkite automobilį, kad matytumėte maršrutą
-                                </div>
-                                <div style={{ 
-                                    display: 'flex', 
-                                    flexWrap: 'wrap', 
-                                    gap: '8px', 
-                                    justifyContent: 'center',
-                                    maxWidth: '300px'
-                                }}>
-                                    {vehicles.slice(0, 4).map(v => (
-                                        <button
-                                            key={v.id}
-                                            className="btn-ghost"
-                                            onClick={() => navigate(`/vehicles/${v.id}`)}
-                                            style={{ fontSize: '12px' }}
-                                        >
-                                            {v.brand} {v.model}
-                                        </button>
-                                    ))}
-                                </div>
-                                
-                                {/* Animated markers */}
-                                <div className="map-marker" style={{ top: '25%', left: '30%' }} />
-                                <div className="map-marker" style={{ top: '45%', left: '55%' }} />
-                                <div className="map-marker" style={{ top: '65%', left: '35%' }} />
-                            </>
-                        )}
+                    <div style={{ flex: 1, minHeight: '360px' }}>
+                        <DashboardMap vehicles={vehicles} token={token} />
                     </div>
                 </div>
             </div>
