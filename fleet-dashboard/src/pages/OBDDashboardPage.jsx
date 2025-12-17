@@ -191,7 +191,7 @@ function OBDPage() {
     function getStats(p) { const vals = telemetry.map(d => d[p]).filter(v => v !== undefined); if (!vals.length) return null; const c = vals[vals.length-1]; return { current: c, min: Math.min(...vals), max: Math.max(...vals), avg: vals.reduce((a,b)=>a+b,0)/vals.length, status: getValueStatus(c, OBD_PARAMS[p]) }; }
 
     async function generateAIAnalysis() {
-        if (!healthScore || !drivingStyle || !fuelEfficiency) return;
+        if (!healthScore || !drivingStyle) return;
         
         setAiLoading(true);
         setAiAnalysis(null);
@@ -200,7 +200,7 @@ function OBDPage() {
         const vehicle = selectedVehicle;
         
         // Build context for AI
-        const context = {
+        const requestData = {
             vehicle: `${vehicle?.brand} ${vehicle?.model} (${vehicle?.year || 'N/A'})`,
             period: timeLabel,
             healthScore: healthScore.score,
@@ -213,18 +213,18 @@ function OBDPage() {
                 overspeedEvents: drivingStyle.os,
                 idlePercent: drivingStyle.idle
             },
-            fuel: {
+            fuel: fuelEfficiency ? {
                 avgConsumption: fuelEfficiency.avg?.toFixed(1),
                 minConsumption: fuelEfficiency.min?.toFixed(1),
                 maxConsumption: fuelEfficiency.max?.toFixed(1),
                 rating: fuelEfficiency.rating
-            },
+            } : {},
             trip: tripStats ? {
                 distance: tripStats.distance?.toFixed(1),
                 movingTime: tripStats.movingTime,
                 idleTime: tripStats.idleTime,
                 maxSpeed: tripStats.maxSpeed
-            } : null,
+            } : {},
             parameters: availableParams.map(p => {
                 const stats = getStats(p);
                 const param = OBD_PARAMS[p];
@@ -238,62 +238,26 @@ function OBDPage() {
             })
         };
 
-        const prompt = `Esi automobilio diagnostikos ekspertas. Išanalizuok šiuos OBD-II duomenis ir pateik trumpą, naudingą apžvalgą lietuvių kalba.
-
-DUOMENYS:
-- Automobilis: ${context.vehicle}
-- Periodas: ${context.period}
-- Variklio sveikatos įvertinimas: ${context.healthScore}%
-- Aptiktos problemos: ${context.issues.length > 0 ? context.issues.join(', ') : 'Nėra'}
-
-VAIRAVIMO STILIUS:
-- Ekonomiškumo balas: ${context.driving.ecoScore}%
-- Staigūs pagreičiai: ${context.driving.hardAccelerations}
-- Staigūs stabdymai: ${context.driving.hardBraking}
-- Aukšti RPM (>4500): ${context.driving.highRpmEvents}
-- Greičio viršijimai (>130 km/h): ${context.driving.overspeedEvents}
-- Tuščios eigos laikas: ${context.driving.idlePercent}%
-
-KURO EFEKTYVUMAS:
-- Vidutinės sąnaudos: ${context.fuel.avgConsumption || 'N/A'} L/100km
-- Min/Max: ${context.fuel.minConsumption || 'N/A'} - ${context.fuel.maxConsumption || 'N/A'} L/100km
-- Įvertinimas: ${context.fuel.rating}
-
-${context.trip ? `KELIONĖS STATISTIKA:
-- Nuvažiuota: ${context.trip.distance} km
-- Judėjimo laikas: ${context.trip.movingTime} min
-- Tuščia eiga: ${context.trip.idleTime} min
-- Max greitis: ${context.trip.maxSpeed} km/h` : ''}
-
-PARAMETRŲ BŪSENA:
-${context.parameters.map(p => `- ${p.name}: vid. ${p.avg}, min ${p.min}, max ${p.max} [${p.status}]`).join('\n')}
-
-Pateik:
-1. Trumpą bendrą įvertinimą (2-3 sakiniai)
-2. 2-4 konkrečias rekomendacijas arba pastebėjimus su emoji
-3. Jei yra problemų - ką reikėtų patikrinti
-
-Formatas: paprastas tekstas, ne per ilgas (max 200 žodžių). Būk konkretus ir naudingas.`;
-
         try {
-            const response = await fetch('https://api.anthropic.com/v1/messages', {
+            const response = await fetch(`${API_BASE_URL}/api/ai/analyze-obd`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    model: 'claude-sonnet-4-20250514',
-                    max_tokens: 1000,
-                    messages: [{ role: 'user', content: prompt }]
-                })
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(requestData)
             });
 
-            if (!response.ok) throw new Error('API request failed');
-            
             const data = await response.json();
-            const text = data.content?.find(c => c.type === 'text')?.text || 'Nepavyko sugeneruoti analizės.';
-            setAiAnalysis(text);
+            
+            if (!response.ok) {
+                throw new Error(data.error || 'API request failed');
+            }
+            
+            setAiAnalysis(data.analysis || 'Nepavyko sugeneruoti analizės.');
         } catch (err) {
             console.error('AI Analysis error:', err);
-            setAiAnalysis('❌ Nepavyko sugeneruoti AI analizės. Bandykite dar kartą.');
+            setAiAnalysis('❌ Klaida: ' + err.message);
         } finally {
             setAiLoading(false);
         }
