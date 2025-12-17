@@ -594,46 +594,50 @@
     display: block;
 }
 
-.fuel-avg-stats {
-    text-align: center;
+.fuel-comparison {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
     margin-bottom: 20px;
     padding: 16px;
     background: rgba(10, 1, 24, 0.3);
     border-radius: 12px;
 }
 
-.fuel-avg-main {
-    display: flex;
-    align-items: baseline;
-    justify-content: center;
-    gap: 8px;
-    margin-bottom: 8px;
+.fuel-comp-item {
+    text-align: center;
 }
 
-.fuel-avg-value {
-    font-size: 32px;
+.fuel-comp-item .comp-label {
+    display: block;
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+}
+
+.fuel-comp-item .comp-value {
+    font-size: 24px;
     font-weight: 700;
     color: var(--text-main);
     font-family: 'Monaco', monospace;
 }
 
-.fuel-avg-unit {
+.fuel-comp-item .comp-value.actual {
+    color: var(--accent);
+}
+
+.fuel-comp-item .comp-unit {
+    display: block;
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
+.fuel-comp-divider {
     font-size: 12px;
     color: var(--text-muted);
-}
-
-.fuel-avg-range {
-    display: flex;
-    justify-content: center;
-    gap: 24px;
-    font-size: 11px;
-    color: var(--text-muted);
-}
-
-.fuel-avg-range span {
-    padding: 4px 10px;
-    background: rgba(255, 255, 255, 0.05);
-    border-radius: 6px;
+    font-weight: 600;
 }
 
 .fuel-card .fuel-stats {
@@ -654,29 +658,6 @@
 
 .fuel-card .fuel-stat span:first-child {
     color: var(--text-muted);
-}
-
-.fuel-calculated {
-    margin-top: 16px;
-    padding: 12px;
-    background: rgba(102, 126, 234, 0.1);
-    border: 1px solid rgba(102, 126, 234, 0.2);
-    border-radius: 8px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.fuel-calc-label {
-    font-size: 11px;
-    color: var(--text-muted);
-}
-
-.fuel-calc-value {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--accent);
-    font-family: 'Monaco', monospace;
 }
 }
 
