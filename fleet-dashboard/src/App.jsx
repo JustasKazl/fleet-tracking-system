@@ -10,7 +10,7 @@ import DashboardPage from "./pages/Dashboard";
 import VehiclesPage from "./pages/VehiclesPage";
 import VehicleDetailsPage from "./pages/VehicleDetailsPage";
 import TripsHistoryPage from "./pages/TripsHistoryPage";
-import OBDPage from "./pages/OBDDashboardPage";
+import OBDDashboardPage from "./pages/OBDDashboardPage";
 import ProfilePage from "./pages/ProfilePage";
 import SettingsPage from "./pages/SettingsPage";
 import AlertsPage from "./pages/AlertsPage";
